@@ -4,14 +4,11 @@ Known limitations of the first version, as work items.
 
 ## Dice rolling
 
-Roll buttons show a "not available yet" notice instead of rolling.
+Roll buttons give the Roll20 chat command to paste instead of rolling (`public/js/roll20.js`).
 
-- [ ] Implement `startRoll` / `finishRoll` in `public/js/roll20-worker.js` (today `startRoll` never resolves).
-- [ ] Parse Roll20 inline rolls (`[[3d6]]`, `[[1d6+2]]`, ...) and `?{Prompt|default}` queries.
-- [ ] Resolve `@{attribute}` references in roll text, including row-relative ones in repeating sections.
-- [ ] Handle `type="roll"` buttons (macro in `value`) as well as the sheet's `startRoll`-based action buttons.
-- [ ] Render the sheet's roll templates (`skillRoll`, `columnlayout`, `macro`, `addToTracker`) in a roll log. `sheet-loader.js` strips them from the markup today.
-- [ ] Decide whether the roll log is per browser or shared with the group (shared needs server-side state).
+- [x] Success rolls work in Roll20: `{3d6[Skill],0d0+99}<N` reports 1 success when the total is N or less (checked in a game on 2026-10-04). The `0d0+99` filler is what makes Roll20 compare the total; `{3d6}<N` checks each die.
+- [x] Damage commands work in Roll20, labels included: `/roll {1d6[Swing Damage]+2, {0}}kh1` (checked on 2026-10-04).
+- [ ] Optional in-app rolling: resolve `startRoll` in `public/js/roll20-worker.js` and render the sheet's roll templates (`skillRoll`, `columnlayout`, `macro`, `addToTracker`), which `sheet-loader.js` strips from the markup today.
 
 ## Icons
 

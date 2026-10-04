@@ -7,6 +7,7 @@ import { after, before, describe, test } from 'node:test';
 import {
   addRow,
   chromePath,
+  clickVisible,
   createSampleCharacter,
   launchBrowser,
   newCharacter,
@@ -205,12 +206,49 @@ describe('GURPS sheet', { skip }, () => {
     await close();
   });
 
-  test('explains that dice rolling is not available yet', { timeout: TIMEOUT }, async () => {
+  test('gives the Roll20 command for a skill roll, after asking for the modifier', { timeout: TIMEOUT }, async () => {
+    const page = await open();
+    await app.context.overridePermissions(new URL(server.url).origin, ['clipboard-read', 'clipboard-sanitized-write']);
+    await createSampleCharacter(page);
+    const [broadsword] = await rowIds(page, 'skills');
+
+    await clickVisible(page, `#sheet-host .repitem[data-reprowid="${broadsword}"] button[name="act_skillroll"]`);
+    await page.waitForSelector('#roll-dialog[open]');
+    assert.equal(await value(page, '#roll-dialog .app-dialog-title'), 'Broadsword');
+    assert.equal(await value(page, '#roll-dialog .app-field span'), 'Modifier');
+    assert.equal(await value(page, '#roll-dialog input'), '0');
+    await page.keyboard.type('-2');
+    await page.keyboard.press('Enter');
+
+    const command = '/roll {3d6[Broadsword],0d0+99}<9';
+    await page.waitForFunction(() => document.querySelector('#roll-panel .app-roll-copy')?.textContent === 'Copied');
+    assert.equal(await value(page, '#roll-panel .app-roll code'), command, 'skill 11 with a -2 modifier');
+    assert.equal(await value(page, '#roll-panel .app-roll-hint'), 'Succeeds on 9 or less');
+    assert.equal(await page.evaluate(() => navigator.clipboard.readText()), command);
+    await close();
+  });
+
+  test('gives the Roll20 command for damage, and nothing when a prompt is cancelled', { timeout: TIMEOUT }, async () => {
     const page = await open();
     await newCharacter(page);
-    await page.evaluate(() => [...document.querySelectorAll('#sheet-host button[type="roll"]')].find((b) => b.offsetParent).click());
-    await page.waitForFunction(() => !document.getElementById('toast').hidden);
-    assert.match(await value(page, '#toast'), /Dice rolling/);
+    await clickVisible(page, '#sheet-host button[name="roll_dmgSwing"]');
+    await page.waitForSelector('#roll-panel:not([hidden])');
+    assert.equal(await value(page, '#roll-panel .app-roll code'), '/roll {1d6[Swing Damage], {0}}kh1', 'ST 10 swing');
+
+    await clickVisible(page, '#sheet-host button[name="act_roll_attribute_strength"]');
+    await page.waitForSelector('#roll-dialog[open]');
+    await page.keyboard.press('Escape');
+    await sleep(300);
+    assert.equal(await page.$$eval('#roll-panel .app-roll', (rolls) => rolls.length), 1, 'no new command');
+    await close();
+  });
+
+  test('opens the links on the sheet’s help buttons', { timeout: TIMEOUT }, async () => {
+    const page = await open();
+    await newCharacter(page);
+    const opened = new Promise((resolve) => app.context.once('targetcreated', (target) => resolve(target.url())));
+    await clickVisible(page, '#sheet-host button[name="roll_blank"]');
+    assert.match(await opened, /^https:\/\//);
     await close();
   });
 

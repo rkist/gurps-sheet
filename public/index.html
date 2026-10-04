@@ -64,6 +64,25 @@
     <div id="loading" class="app-loading">Loading sheet…</div>
   </main>
 
+  <aside id="roll-panel" class="app-rolls" aria-label="Roll20 commands" hidden>
+    <header class="app-rolls-head">
+      <span>Paste in Roll20 chat</span>
+      <button type="button" class="app-rolls-close" aria-label="Close">✕</button>
+    </header>
+    <ol class="app-rolls-list" aria-live="polite"></ol>
+  </aside>
+
+  <dialog id="roll-dialog" class="app-dialog">
+    <form method="dialog">
+      <h2 class="app-dialog-title"></h2>
+      <div class="app-dialog-fields"></div>
+      <div class="app-dialog-actions">
+        <button type="button" class="app-btn" data-action="cancel">Cancel</button>
+        <button type="submit" class="app-btn app-btn-primary" value="roll">Get command</button>
+      </div>
+    </form>
+  </dialog>
+
   <div id="toast" class="app-toast" role="status" hidden></div>
   <input type="file" id="import-file" accept=".json,application/json" hidden>
 </body>

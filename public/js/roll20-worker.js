@@ -30,6 +30,7 @@
 
   const handlers = dict();      // 'change:foo' -> [callback, ...]
   let context = null;           // { section, rowId } while handling a repeating-row event
+  let clickContext = null;      // the row of the last clicked button, for startRoll
 
   function report(err) {
     console.error('[sheet worker]', err);
@@ -316,10 +317,14 @@
     return language;
   }
 
-  // Dice are not supported yet: hand the roll text to the page and never
-  // resolve, so the sheet's roll handlers simply stop there.
+  // The page turns the roll text into a Roll20 chat command; nothing is rolled
+  // here. The promise never resolves, so the sheet's handlers stop before
+  // finishRoll(), which only fills in Roll20's chat card. The sheet often calls
+  // this after an await, when the row context is gone, so the clicked row is
+  // remembered too.
   function startRoll(text) {
-    post({ type: 'roll', text: String(text) });
+    const ctx = context || clickContext;
+    post({ type: 'roll', text: String(text), section: ctx ? ctx.section : null, rowId: ctx ? ctx.rowId : null });
     return new Promise(() => {});
   }
 
@@ -415,6 +420,7 @@
   function click(msg) {
     const name = String(msg.name).toLowerCase();
     const info = { sourceType: 'player', htmlAttributes: msg.htmlAttributes || {} };
+    clickContext = msg.section && msg.rowId ? { section: msg.section, rowId: msg.rowId } : null;
     if (msg.section && msg.rowId) {
       const full = msg.section + '_' + msg.rowId + '_' + name;
       info.sourceAttribute = full;

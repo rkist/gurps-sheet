@@ -2,6 +2,8 @@
 import { loadSheet, LANGUAGES, LANGUAGE_TAGS } from './sheet-loader.js';
 import { SheetView } from './sheet-view.js';
 import { isRowId, parseRepeating, UNSAFE_KEYS } from './names.js';
+import { answerQueries, buildRoll, expandAttributes, findQueries } from './roll20.js';
+import { askQueries, RollPanel } from './roll-ui.js';
 import * as store from './store.js';
 
 const FORMAT = 'gurps-sheet-server/characters';
@@ -16,9 +18,11 @@ const state = {
   saveTimer: 0,
   saving: Promise.resolve(),
   queue: Promise.resolve(),
+  rolls: Promise.resolve(),
   focusName: false,
-  lastRollToast: 0,
 };
+
+const rollPanel = new RollPanel($('roll-panel'));
 
 // Navigation, language switches etc. run one at a time.
 function enqueue(task) {
@@ -181,14 +185,16 @@ async function openCharacter(id) {
     sheet: state.sheet,
     character,
     onChange: scheduleSave,
-    onRoll: () => {
-      if (Date.now() - state.lastRollToast < 5000) return;
-      state.lastRollToast = Date.now();
-      toast("Dice rolling isn't available yet. This version is a character builder.");
+    onRoll: (request) => {
+      state.rolls = state.rolls.then(() => roll(request)).catch((err) => {
+        console.error(err);
+        toast(err.message || String(err), true);
+      });
     },
     onError: (message) => toast(`Sheet error: ${message}`, true),
   });
   state.view.mount();
+  rollPanel.clear();
   window.scrollTo(0, 0);
 
   if (state.focusName) {
@@ -200,6 +206,7 @@ async function openCharacter(id) {
 
 async function closeCharacter() {
   if (!state.view) return;
+  $('roll-dialog').close();
   await saveNow();
   state.view.destroy();
   state.view = null;
@@ -244,6 +251,32 @@ function saveNow() {
       },
     );
   return state.saving;
+}
+
+// ---- rolls ------------------------------------------------------------------------
+
+// Roll buttons don't roll: they fill in the sheet's Roll20 macro, ask its
+// prompts, and list the Roll20 chat command to paste. Help buttons hold a link.
+async function roll({ text, row }) {
+  const view = state.view;
+  if (!view) return;
+  const macro = expandAttributes(text, (name) => view.lookup(name, row));
+  if (/^https?:\/\/\S+$/i.test(macro.trim())) {
+    window.open(macro.trim(), '_blank', 'noopener');
+    return;
+  }
+
+  let answers = new Map();
+  const queries = findQueries(macro);
+  if (queries.length) {
+    const preview = buildRoll(answerQueries(macro));
+    answers = await askQueries($('roll-dialog'), preview.title || preview.subtitle, queries);
+    if (!answers || state.view !== view) return;
+  }
+
+  const result = buildRoll(answerQueries(macro, answers));
+  if (result.commands.length) rollPanel.add(result);
+  else toast('Nothing to roll on this button.');
 }
 
 // ---- actions ----------------------------------------------------------------------
@@ -418,6 +451,8 @@ function wireUp() {
     if (action === 'new') enqueue(createCharacter);
     if (action === 'import') pickFile();
   });
+
+  $('roll-dialog').querySelector('[data-action="cancel"]').addEventListener('click', () => $('roll-dialog').close());
 
   $('character-name').addEventListener('input', (e) => {
     if (!state.view) return;

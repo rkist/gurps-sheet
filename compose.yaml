@@ -1,0 +1,19 @@
+# Builds the image from this checkout and serves it on http://localhost:8080.
+#
+#   docker compose up -d                       start (or rebuild after `git pull`)
+#   GURPS_PORT=3000 docker compose up -d       another host port (or set it in .env)
+#
+# No volumes: characters are saved in each player's browser, not on the server.
+name: gurps-sheet
+
+services:
+  gurps-sheet:
+    build: .
+    image: gurps-sheet:local
+    pull_policy: build
+    restart: unless-stopped
+    ports:
+      - "${GURPS_PORT:-8080}:8080"
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]

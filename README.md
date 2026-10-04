@@ -24,6 +24,39 @@ npm start        # http://localhost:8080
 behind a reverse proxy or a VPN (e.g. Tailscale) if it shouldn't be public. Characters live in the
 browsers, so there is no shared data on the server, but anyone who can reach it can use it.
 
+## Run it with Docker
+
+```sh
+docker compose up -d     # http://localhost:8080
+```
+
+This builds the image from the checkout. After a `git pull`, run the same command again to rebuild.
+`GURPS_PORT=3000 docker compose up -d` (or `GURPS_PORT` in a `.env` file) changes the port.
+
+There are no volumes: characters live in the players' browsers, so the container has nothing to back
+up. It runs as a non-root user on a read-only filesystem with no Linux capabilities, has a health
+check, and stops right away on `docker compose down`.
+
+### Prebuilt image
+
+Each push to `main` publishes `ghcr.io/rkist/gurps-sheet` for amd64 and arm64, tagged `latest` and
+`sha-<commit>` (and `1.2.3` and `1.2` for a `v1.2.3` git tag). It is also rebuilt every week to pick up
+security fixes in the Node base image.
+
+```sh
+docker run -d --name gurps-sheet --restart unless-stopped -p 8080:8080 ghcr.io/rkist/gurps-sheet
+```
+
+To use it from Compose instead of building, replace the `build`, `image` and `pull_policy` lines in
+`compose.yaml` with `image: ghcr.io/rkist/gurps-sheet`. Update with
+`docker compose pull && docker compose up -d`.
+
+### Moving to a new address
+
+Browsers keep saved data per address (scheme, host and port). If the app moves, for example from
+`http://localhost:8080` to `https://gurps.example.com`, players see an empty character list at the new
+address. Have everyone use **Export all** at the old address and **Import** at the new one.
+
 ## Repository layout
 
 | Path | What it is |
@@ -33,6 +66,8 @@ browsers, so there is no shared data on the server, but anyone who can reach it 
 | `server.mjs` | Dependency-free static server with gzip and a strict Content Security Policy. |
 | `scripts/sync-sheet.mjs` | Replaces `GURPS/` with a fresh copy from an upstream checkout. |
 | `tests/` | End-to-end tests that drive the app in headless Chrome. |
+| `Dockerfile`, `compose.yaml` | The container image, and a Compose file that builds and runs it. |
+| `.github/` | CI that builds the image, runs the tests against it and publishes it to GHCR, plus Dependabot for the base image and actions. |
 | `TODO.md` | Known limitations and planned work. |
 
 ### Updating the sheet
@@ -57,6 +92,9 @@ isn't in a standard location.
 npm install      # dev dependency: puppeteer-core
 npm test
 ```
+
+`TEST_URL=http://localhost:8080/ npm test` runs them against a server that is already running instead,
+such as the Docker container. CI does that for every pull request.
 
 They cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the

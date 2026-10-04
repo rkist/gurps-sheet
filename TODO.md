@@ -35,7 +35,3 @@ Characters live in each browser's IndexedDB, which the browser or player can cle
 
 - [ ] Remind players to back up (for example, show the last export date and nudge after a while).
 - [ ] Optional server-side storage, so characters survive cleared browser data and can be shared with the GM.
-
-## Docker
-
-- [ ] Add Docker support. A draft `Dockerfile` exists but has never been built or run: build and test it, add a `docker-compose.yml` example and a health check, and document it in the README.

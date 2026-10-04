@@ -1,0 +1,19 @@
+{
+  "name": "gurps-sheet",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Self-hosted GURPS 4e character sheet builder: runs the Roll20 GURPS sheet without Roll20.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "sync": "node scripts/sync-sheet.mjs",
+    "start": "node server.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^25.12.0"
+  }
+}

@@ -1,0 +1,484 @@
+/* ---- App chrome ----------------------------------------------------------------- */
+
+:root {
+  --app-bg: #e9e5dc;
+  --app-surface: #ffffff;
+  --app-text: #1d2329;
+  --app-muted: #5d6670;
+  --app-border: #d3cdc0;
+  --app-bar-bg: #26332b;
+  --app-bar-text: #f3f1ea;
+  --app-accent: #3c6b4a;
+  --app-accent-text: #ffffff;
+  --app-danger: #a33a2c;
+  --app-focus: #6aa57c;
+  --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.08), 0 4px 16px rgba(0, 0, 0, 0.06);
+  --app-font: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --app-bg: #1b1f1d;
+    --app-surface: #262b28;
+    --app-text: #e8e6df;
+    --app-muted: #a3a89f;
+    --app-border: #3a413c;
+    --app-bar-bg: #121614;
+    --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+  }
+}
+
+:root[data-theme="dark"] {
+  --app-bg: #1b1f1d;
+  --app-surface: #262b28;
+  --app-text: #e8e6df;
+  --app-muted: #a3a89f;
+  --app-border: #3a413c;
+  --app-bar-bg: #121614;
+  --app-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font-family: var(--app-font);
+  font-size: 15px;
+}
+
+.app-visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.app-bar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 16px;
+  padding: 8px 16px;
+  background: var(--app-bar-bg);
+  color: var(--app-bar-text);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+
+.app-brand {
+  color: inherit;
+  font-weight: 700;
+  font-size: 17px;
+  letter-spacing: 0.02em;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.app-bar-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+body:not([data-view="home"]) .app-home-only,
+body:not([data-view="sheet"]) .app-sheet-only {
+  display: none;
+}
+
+.app-btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  color: inherit;
+  font: 500 14px/1.2 var(--app-font);
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.app-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.app-btn:focus-visible,
+.app-lang select:focus-visible,
+.app-name input:focus-visible,
+.app-card:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 2px;
+}
+
+.app-btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.app-btn-primary {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+  color: var(--app-accent-text);
+}
+
+.app-btn-primary:hover {
+  background: #467d57;
+}
+
+.app-btn-danger:hover {
+  background: var(--app-danger);
+  border-color: var(--app-danger);
+}
+
+.app-btn-quiet {
+  border-color: transparent;
+  background: transparent;
+}
+
+.app-name {
+  flex: 0 1 280px;
+  min-width: 140px;
+}
+
+.app-bar .app-name input {
+  width: 100%;
+  min-height: 34px;
+  padding: 6px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--app-bar-text);
+  font: 600 15px/1.2 var(--app-font);
+}
+
+.app-bar .app-name input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+  font-style: normal;
+  opacity: 1;
+}
+
+.app-status {
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 13px;
+  min-width: 70px;
+}
+
+.app-lang {
+  margin-left: auto;
+}
+
+.app-bar .app-lang select {
+  min-height: 34px;
+  padding: 4px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 6px;
+  background: var(--app-bar-bg);
+  color: var(--app-bar-text);
+  font: 14px var(--app-font);
+}
+
+@media (max-width: 700px) {
+  .app-bar {
+    position: static;
+  }
+
+  .app-lang {
+    margin-left: 0;
+  }
+}
+
+.app-home {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 28px 16px 40px;
+}
+
+.app-home h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+}
+
+.app-note {
+  margin: 0 0 20px;
+  color: var(--app-muted);
+}
+
+.app-list {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-card {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 4px 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--app-border);
+  border-radius: 8px;
+  background: var(--app-surface);
+  color: inherit;
+  text-decoration: none;
+  box-shadow: var(--app-shadow);
+}
+
+.app-card:hover {
+  border-color: var(--app-accent);
+}
+
+.app-card-name {
+  font-weight: 650;
+  font-size: 17px;
+}
+
+.app-card-meta {
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.app-empty {
+  padding: 28px 16px;
+  border: 1px dashed var(--app-border);
+  border-radius: 8px;
+  text-align: center;
+}
+
+.app-empty .app-btn {
+  margin: 4px;
+  color: var(--app-text);
+  border-color: var(--app-border);
+  background: var(--app-surface);
+}
+
+.app-empty .app-btn-primary {
+  color: var(--app-accent-text);
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+}
+
+.app-footer {
+  margin-top: 40px;
+  color: var(--app-muted);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.app-sheet {
+  padding: 16px;
+  overflow-x: auto;
+}
+
+.app-sheet-frame {
+  width: max-content;
+  min-width: 870px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 30px 8px 12px;
+  background: #fff;
+  border-radius: 6px;
+  box-shadow: var(--app-shadow);
+}
+
+.app-loading {
+  padding: 60px 16px;
+  text-align: center;
+  color: var(--app-muted);
+}
+
+.app-toast {
+  position: fixed;
+  left: 50%;
+  bottom: 20px;
+  z-index: 2000;
+  max-width: calc(100% - 32px);
+  padding: 10px 16px;
+  border-radius: 8px;
+  background: #222a25;
+  color: #fff;
+  font-size: 14px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+  transform: translateX(-50%);
+}
+
+.app-toast-error {
+  background: var(--app-danger);
+}
+
+/* ---- Roll20 environment ------------------------------------------------------------
+   Base styles Roll20 gives every character sheet. Wrapped in :where() so they
+   have zero specificity and the sheet's own CSS always wins, as on Roll20. */
+
+.charsheet {
+  --r20-icon-font: "Apple Symbols", "Segoe UI Symbol", "Noto Sans Symbols 2", "Noto Sans Symbols", "DejaVu Sans", sans-serif;
+  position: relative;
+  color: #000;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: left;
+}
+
+:where(.charsheet) :where(input, select, textarea, button) {
+  font-family: inherit;
+  font-size: inherit;
+  line-height: normal;
+  color: inherit;
+}
+
+:where(.charsheet) :where(input[type="text"], input[type="number"], select, textarea) {
+  display: inline-block;
+  margin: 0;
+  padding: 2px 4px;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+:where(.charsheet) :where(input[type="text"], input[type="number"]) {
+  height: 24px;
+}
+
+:where(.charsheet) :where(select) {
+  height: 24px;
+  padding: 0 2px;
+}
+
+:where(.charsheet) :where(textarea) {
+  min-height: 48px;
+  resize: vertical;
+}
+
+:where(.charsheet) :where(input:disabled) {
+  color: inherit;
+  -webkit-text-fill-color: currentColor;
+  opacity: 1;
+}
+
+:where(.charsheet) :where(input[type="checkbox"], input[type="radio"]) {
+  margin: 0 3px;
+  vertical-align: middle;
+}
+
+:where(.charsheet) :where(label) {
+  display: inline-block;
+  font-weight: bold;
+}
+
+:where(.charsheet) :where(h1, h2, h3, h4) {
+  margin: 4px 0;
+  line-height: 1.2;
+}
+
+:where(.charsheet) :where(table) {
+  border-collapse: collapse;
+}
+
+:where(.charsheet) :where(button[type="roll"], button[type="action"], .btn) {
+  display: inline-block;
+  margin: 0;
+  padding: 2px 8px;
+  border: 1px solid #b8b8b8;
+  border-radius: 4px;
+  background: linear-gradient(#ffffff, #e6e6e6);
+  color: #333;
+  font-size: 13px;
+  line-height: 18px;
+  text-align: center;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+:where(.charsheet) :where(button[type="roll"], button[type="action"], .btn):hover {
+  background: #e6e6e6;
+}
+
+:where(.charsheet) :where(button[type="roll"])::before {
+  font-family: var(--r20-icon-font);
+  content: "⬢ ";
+}
+
+/* Repeating sections (structure created by sheet-view.js, like Roll20's). */
+:where(.charsheet .repcontainer, .charsheet .repitem) {
+  position: relative;
+}
+
+:where(.charsheet .repcontainer .itemcontrol) {
+  display: none;
+}
+
+:where(.charsheet .repcontainer.editmode .repitem) {
+  min-height: 30px;
+}
+
+:where(.charsheet .repcontainer.editmode .itemcontrol) {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-direction: row-reverse;
+  padding: 0 6px;
+  background: rgba(255, 255, 255, 0.6);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+:where(.charsheet .repcontrol) {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+/* The sheet styles every `.sheet-box button` as a 12px-tall flat icon button,
+   which would also hit Roll20's row controls; keep those readable. */
+.charsheet .repcontrol .btn,
+.charsheet .itemcontrol .btn {
+  height: auto;
+  padding: 2px 10px;
+  border: 1px solid #b8b8b8;
+  border-radius: 4px;
+  background: linear-gradient(#ffffff, #e6e6e6);
+  color: #333;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.charsheet .itemcontrol .repcontrol_del {
+  border-color: #a33a2c;
+  background: #c0473a;
+  color: #fff;
+}
+
+.charsheet .itemcontrol .repcontrol_move {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.charsheet .repitem.r20-dragging {
+  opacity: 0.6;
+}
+
+/* Fixed-width label column; a few labels are a hair too wide in non-Roll20 fonts. */
+.charsheet .sheet-stats .sheet-col0 {
+  white-space: nowrap;
+}

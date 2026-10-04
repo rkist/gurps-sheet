@@ -147,6 +147,7 @@ export class SheetView {
   }
 
   // Inside a repeating row, @{field} means that row's field when the section has it.
+  // Also used to fill in roll macros.
   lookup(name, row) {
     const n = name.toLowerCase();
     if (row) {
@@ -284,9 +285,10 @@ export class SheetView {
     if (target.classList.contains('repcontrol_del')) return this.deleteRow(target.closest('.repitem'));
 
     const type = target.getAttribute('type');
+    const row = this.rowOf(target);
     if (type === 'roll') {
       event.preventDefault();
-      this.onRoll?.(target.getAttribute('value') || '');
+      this.onRoll?.({ text: target.getAttribute('value') || '', row });
       return;
     }
     if (type !== 'action') return;
@@ -295,14 +297,15 @@ export class SheetView {
     if (!/^act_/i.test(name)) return;
     const htmlAttributes = {};
     for (const attr of target.attributes) htmlAttributes[attr.name] = attr.value;
-    const message = { type: 'click', name: name.slice(4).toLowerCase(), htmlAttributes };
-    const item = target.closest('.repitem');
-    if (item && this.host.contains(item)) {
-      message.section = item.parentElement.dataset.groupname;
-      message.rowId = item.dataset.reprowid;
-    }
-    this.worker.postMessage(message);
+    this.worker.postMessage({ type: 'click', name: name.slice(4).toLowerCase(), htmlAttributes, ...row });
   };
+
+  // { section, rowId } of the repeating row an element is in, or null.
+  rowOf(el) {
+    const item = el.closest('.repitem');
+    if (!item || !this.host.contains(item)) return null;
+    return { section: item.parentElement.dataset.groupname, rowId: item.dataset.reprowid };
+  }
 
   addRow(section) {
     const rowId = generateRowId();
@@ -385,9 +388,14 @@ export class SheetView {
 
   handleWorkerMessage = (event) => {
     const msg = event.data;
-    if (msg.type === 'update') this.applyUpdate(msg);
-    else if (msg.type === 'roll') this.onRoll?.(msg.text);
-    else if (msg.type === 'fatal') this.onError?.(msg.message);
+    if (msg.type === 'update') {
+      this.applyUpdate(msg);
+    } else if (msg.type === 'roll') {
+      const row = msg.section && msg.rowId ? { section: msg.section, rowId: msg.rowId } : null;
+      this.onRoll?.({ text: msg.text, row });
+    } else if (msg.type === 'fatal') {
+      this.onError?.(msg.message);
+    }
   };
 
   applyUpdate({ values, sections }) {

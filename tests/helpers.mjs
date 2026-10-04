@@ -146,6 +146,11 @@ export function rowNames(page, section) {
   );
 }
 
+// Clicks the first visible match, e.g. one of a row's buttons.
+export function clickVisible(page, selector) {
+  return page.evaluate((sel) => [...document.querySelectorAll(sel)].find((el) => el.offsetParent).click(), selector);
+}
+
 export function addRow(page, section) {
   return page.click(`#sheet-host .repcontrol[data-groupname="repeating_${section}"] .repcontrol_add`);
 }

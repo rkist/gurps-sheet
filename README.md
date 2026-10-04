@@ -9,8 +9,12 @@ unmodified, without the rest of Roll20.
 - All of the sheet's own logic runs: derived stats, skill and spell levels, point totals, and the
   built-in GCA/GCS importers (gear tab → Import).
 - Translations come from the sheet. The language picker lists the languages that are actually translated.
+- Roll buttons don't roll dice. They give you the Roll20 chat command, with the sheet's numbers and
+  modifiers filled in, and copy it to paste into your Roll20 game: Broadsword-11 at -2 becomes
+  `/roll {3d6[Broadsword],0d0+99}<9`. The `0d0+99` makes Roll20 compare the total, so it shows
+  "1 success" on 9 or less.
 
-Known limitations and planned work are in [TODO.md](TODO.md). The main one: no dice rolling yet.
+Known limitations and planned work are in [TODO.md](TODO.md).
 
 ## Run it
 
@@ -114,7 +118,7 @@ against it. CI does the same for every pull request.
 
 They cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the
-sheet's built-in GCS importer, and the dice notice. Every test also fails on any console error or
+sheet's built-in GCS importer, and the Roll20 commands of the roll buttons. Every test also fails on any console error or
 warning, including ones from the sheet worker.
 
 ## How it works
@@ -129,6 +133,7 @@ functions, so the sheet's code runs as-is.
 | `public/js/sheet-loader.js` | Loads `gurps.html` / `gurps.css`, splits out the worker code, and prepares the markup the way Roll20's legacy pipeline does: `sheet-` class prefixes, translations, field defaults and icon-font stand-ins. It also closes a few unclosed `<b>` tags that would otherwise make inactive tabs show. |
 | `public/js/sheet-view.js` | Mounts the sheet for one character, binds every `attr_*` field, builds repeating sections (add, modify, delete, drag to reorder), computes auto-calculated fields, and passes edits and button clicks to the worker. |
 | `public/js/autocalc.js` | Evaluates Roll20 auto-calc formulas such as `round(2 * @{basic_lift})` without `eval`. |
+| `public/js/roll20.js`, `public/js/roll-ui.js` | Turn a roll button's macro into Roll20 chat commands: fill in `@{attributes}`, ask its `?{prompts}`, work out the target number, and list the commands to copy. |
 | `public/js/app.js`, `public/js/store.js` | Character list, saving, import/export and language. |
 | `public/app.css` | App chrome, plus the base styles Roll20 gives every sheet (zero specificity, so the sheet's CSS wins). |
 

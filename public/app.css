@@ -334,6 +334,187 @@ body:not([data-view="sheet"]) .app-sheet-only {
   background: var(--app-danger);
 }
 
+/* ---- Roll20 commands -------------------------------------------------------------- */
+
+.app-rolls .app-btn,
+.app-dialog .app-btn {
+  color: var(--app-text);
+  border-color: var(--app-border);
+  background: var(--app-surface);
+}
+
+.app-rolls .app-btn:hover,
+.app-dialog .app-btn:hover {
+  border-color: var(--app-accent);
+}
+
+.app-dialog .app-btn-primary {
+  color: var(--app-accent-text);
+  border-color: var(--app-accent);
+  background: var(--app-accent);
+}
+
+.app-rolls {
+  position: fixed;
+  right: 16px;
+  bottom: 16px;
+  z-index: 1500;
+  width: min(460px, calc(100vw - 32px));
+  max-height: min(60vh, 520px);
+  overflow-y: auto;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.28);
+}
+
+body:not([data-view="sheet"]) .app-rolls {
+  display: none;
+}
+
+.app-rolls-head {
+  position: sticky;
+  top: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px 6px 14px;
+  border-bottom: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.app-rolls-close {
+  appearance: none;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.app-rolls-close:hover {
+  color: var(--app-text);
+}
+
+.app-rolls-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.app-roll {
+  padding: 10px 14px 12px;
+}
+
+.app-roll + .app-roll {
+  border-top: 1px solid var(--app-border);
+  opacity: 0.7;
+}
+
+.app-roll-head {
+  margin: 0 0 6px;
+  font-size: 14px;
+}
+
+.app-roll-head span {
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.app-roll-command {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.app-roll-command + .app-roll-command {
+  margin-top: 6px;
+}
+
+.app-roll-command code {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 9px;
+  border-radius: 6px;
+  background: var(--app-bg);
+  font: 13px/1.35 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.app-roll-copy {
+  justify-content: center;
+  min-width: 76px;
+}
+
+.app-roll-hint {
+  margin: 4px 0 0;
+  color: var(--app-muted);
+  font-size: 12px;
+}
+
+.app-dialog {
+  width: min(360px, calc(100vw - 32px));
+  padding: 20px;
+  border: 1px solid var(--app-border);
+  border-radius: 10px;
+  background: var(--app-surface);
+  color: var(--app-text);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.3);
+}
+
+.app-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.app-dialog-title {
+  margin: 0 0 16px;
+  font-size: 17px;
+}
+
+.app-field {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 12px;
+  color: var(--app-muted);
+  font-size: 13px;
+}
+
+.app-field input,
+.app-field select {
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--app-border);
+  border-radius: 6px;
+  background: var(--app-bg);
+  color: var(--app-text);
+  font: 15px/1.2 var(--app-font);
+}
+
+.app-field input:focus-visible,
+.app-field select:focus-visible,
+.app-rolls .app-btn:focus-visible,
+.app-rolls-close:focus-visible {
+  outline: 2px solid var(--app-focus);
+  outline-offset: 1px;
+}
+
+.app-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 18px;
+}
+
 /* ---- Roll20 environment ------------------------------------------------------------
    Base styles Roll20 gives every character sheet. Wrapped in :where() so they
    have zero specificity and the sheet's own CSS always wins, as on Roll20. */

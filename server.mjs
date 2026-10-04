@@ -46,7 +46,16 @@ const csp = [
 
 const gzCache = new Map();
 
-const server = http.createServer(async (req, res) => {
+// An error in one request (e.g. a file that can't be read) must not stop the server.
+const server = http.createServer((req, res) => {
+  handle(req, res).catch((err) => {
+    console.error(`${req.method} ${req.url} failed:`, err);
+    if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end(res.headersSent ? undefined : 'Server error');
+  });
+});
+
+async function handle(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });
     res.end();
@@ -100,23 +109,25 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  let body = await readFile(file);
+  let body;
   if (compressible.test(type) && /\bgzip\b/.test(req.headers['accept-encoding'] || '')) {
     const cached = gzCache.get(file);
     if (cached && cached.etag === etag) {
       body = cached.body;
     } else {
-      body = gzipSync(body);
+      body = gzipSync(await readFile(file));
       gzCache.set(file, { etag, body });
     }
     headers['Content-Encoding'] = 'gzip';
     headers.Vary = 'Accept-Encoding';
+  } else {
+    body = await readFile(file);
   }
   headers['Content-Length'] = body.length;
 
   res.writeHead(200, headers);
   res.end(req.method === 'HEAD' ? undefined : body);
-});
+}
 
 server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;

@@ -133,3 +133,13 @@ server.listen(port, host, () => {
   const shown = host === '0.0.0.0' ? 'localhost' : host;
   console.log(`GURPS sheet builder running at http://${shown}:${port}`);
 });
+
+// As PID 1 in a container, Node ignores SIGTERM/SIGINT unless they are handled,
+// so `docker stop` would wait for its timeout and then kill the server.
+for (const signal of ['SIGTERM', 'SIGINT']) {
+  process.on(signal, () => {
+    server.close(() => process.exit(0));
+    server.closeIdleConnections?.();
+    setTimeout(() => process.exit(0), 3000).unref();
+  });
+}

@@ -33,7 +33,9 @@ function freePort() {
   });
 }
 
+// TEST_URL runs the tests against a server that is already running, such as the Docker image.
 export async function startServer() {
+  if (process.env.TEST_URL) return { url: process.env.TEST_URL.replace(/\/?$/, '/'), stop() {} };
   const port = await freePort();
   const child = spawn(process.execPath, ['server.mjs'], {
     cwd: projectRoot,

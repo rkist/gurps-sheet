@@ -24,10 +24,12 @@ npm start        # http://localhost:8080
 behind a reverse proxy or a VPN (e.g. Tailscale) if it shouldn't be public. Characters live in the
 browsers, so there is no shared data on the server, but anyone who can reach it can use it.
 
+`make` lists shortcuts for the commands in this README.
+
 ## Run it with Docker
 
 ```sh
-docker compose up -d     # http://localhost:8080
+docker compose up -d     # or `make up`; http://localhost:8080
 ```
 
 This builds the image from the checkout. After a `git pull`, run the same command again to rebuild.
@@ -40,8 +42,8 @@ check, and stops right away on `docker compose down`.
 ### Prebuilt image
 
 Each push to `main` publishes `ghcr.io/rkist/gurps-sheet` for amd64 and arm64, tagged `latest` and
-`sha-<commit>` (and `1.2.3` and `1.2` for a `v1.2.3` git tag). It is also rebuilt every week to pick up
-security fixes in the Node base image.
+`sha-<commit>`. Releases add version tags such as `0.2.1` and `0.2`. `latest` is also rebuilt every
+week to pick up security fixes in the Node base image.
 
 ```sh
 docker run -d --name gurps-sheet --restart unless-stopped -p 8080:8080 ghcr.io/rkist/gurps-sheet
@@ -50,6 +52,18 @@ docker run -d --name gurps-sheet --restart unless-stopped -p 8080:8080 ghcr.io/r
 To use it from Compose instead of building, replace the `build`, `image` and `pull_policy` lines in
 `compose.yaml` with `image: ghcr.io/rkist/gurps-sheet`. Update with
 `docker compose pull && docker compose up -d`.
+
+### Releasing
+
+```sh
+make publish                  # the next patch version, e.g. v0.2.0 -> v0.2.1
+make publish VERSION=1.0.0
+```
+
+It shows the version and the `main` commit it will release and asks to confirm. Then it pushes the
+tag, waits while CI tests the image and publishes it as `1.0.0` and `1.0`, and creates the GitHub
+release with generated notes. If CI fails, nothing is published and no release is created. The first
+release uses the version in `package.json`. Needs the [GitHub CLI](https://cli.github.com), logged in.
 
 ### Moving to a new address
 
@@ -64,7 +78,8 @@ address. Have everyone use **Export all** at the old address and **Import** at t
 | `GURPS/` | Unmodified copy of the `GURPS` folder from [Roll20/roll20-character-sheets](https://github.com/Roll20/roll20-character-sheets). Two files are added: `LICENSE` (Roll20's MIT license) and `UPSTREAM.json` (the upstream commit and sheet version it was copied from). Served at `/sheet/`. |
 | `public/` | The app: `index.html`, `app.css` and the JavaScript in `public/js/`. |
 | `server.mjs` | Dependency-free static server with gzip and a strict Content Security Policy. |
-| `scripts/sync-sheet.mjs` | Replaces `GURPS/` with a fresh copy from an upstream checkout. |
+| `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
+| `Makefile` | Shortcuts for the common commands. `make` lists them. |
 | `tests/` | End-to-end tests that drive the app in headless Chrome. |
 | `Dockerfile`, `compose.yaml` | The container image, and a Compose file that builds and runs it. |
 | `.github/` | CI that builds the image, runs the tests against it and publishes it to GHCR, plus Dependabot for the base image and actions. |
@@ -93,8 +108,9 @@ npm install      # dev dependency: puppeteer-core
 npm test
 ```
 
-`TEST_URL=http://localhost:8080/ npm test` runs them against a server that is already running instead,
-such as the Docker container. CI does that for every pull request.
+`TEST_URL=http://localhost:8080/ npm test` runs them against a server that is already running instead.
+`make test-docker` builds the image, starts it locked down like `compose.yaml` and runs the tests
+against it. CI does the same for every pull request.
 
 They cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the

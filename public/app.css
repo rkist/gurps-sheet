@@ -281,6 +281,18 @@ body:not([data-view="sheet"]) .app-sheet-only {
   line-height: 1.5;
 }
 
+.app-footer a {
+  color: inherit;
+}
+
+.app-footer-port {
+  font-size: 13px;
+}
+
+.app-footer-port strong {
+  color: var(--app-text);
+}
+
 .app-sheet {
   padding: 16px;
   overflow-x: auto;

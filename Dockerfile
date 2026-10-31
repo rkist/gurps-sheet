@@ -1,5 +1,5 @@
 # The server has no dependencies, so the image is Node plus the files it serves.
-FROM node:24-alpine
+FROM node:26-alpine
 
 LABEL org.opencontainers.image.title="GURPS Sheet" \
       org.opencontainers.image.description="Self-hosted GURPS 4e character sheet builder: runs the Roll20 GURPS sheet without Roll20." \

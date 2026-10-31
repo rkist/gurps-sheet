@@ -249,6 +249,10 @@ describe('GURPS sheet', { skip }, () => {
     const opened = new Promise((resolve) => app.context.once('targetcreated', (target) => resolve(target.url())));
     await clickVisible(page, '#sheet-host button[name="roll_blank"]');
     assert.match(await opened, /^https:\/\//);
+    // The block of links and notices at the bottom of the sheet.
+    const footer = await page.$eval('#sheet-host [data-i18n="gurps-4th-edition-wiki-button"]', (el) => el.closest('.logo').textContent);
+    assert.match(footer, /GURPS 4th Edition Roll20 Wiki Page/, 'the wiki link stays');
+    assert.doesNotMatch(footer, /trademark|feedback|forum|discord/i, 'the trademark notice, forum and Discord lines are left out');
     await close();
   });
 

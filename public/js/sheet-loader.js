@@ -142,6 +142,16 @@ function closeFormattingTags(html) {
 
 function prepareMarkup(root, translations) {
   root.querySelectorAll('script, rolltemplate').forEach((el) => el.remove());
+  // Notices in the footer, next to the wiki link, that a group's own copy doesn't need: the
+  // Steve Jackson Games trademark text and the calls to give feedback on the Roll20 forum and Discord.
+  root.querySelector('[data-i18n="gurps-sheet-game-aid-trademark"]')?.closest('p')?.remove();
+  const footer = root.querySelector('[data-i18n="gurps-4th-edition-wiki-button"]')?.closest('.logo');
+  if (footer) {
+    footer.querySelector('button[value*="roll20.net/forum"]')?.closest('.control')?.remove();
+    for (const el of footer.querySelectorAll('h3, p')) {
+      if (/feedback|discord/i.test(el.textContent)) el.remove();
+    }
+  }
 
   // Translations first: some contain markup that also needs class prefixing.
   for (const el of root.querySelectorAll('[data-i18n]')) {

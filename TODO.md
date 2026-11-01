@@ -26,6 +26,15 @@ Roll20's Pictos and dice fonts are proprietary, so their glyphs are mapped to Un
 
 - [ ] Set the character name after the sheet's built-in import. The importer leaves `character_name` alone because Roll20 keeps the name outside the sheet.
 
+## Books
+
+- [x] Ref fields open the player's own PDFs at the right page (`public/js/books.js`).
+- [ ] Find a PDF's offset by itself, from its page labels or the printed page numbers (as
+  [gurps_4e_revised_hyperlink](https://github.com/plazman30/gurps_4e_revised_hyperlink) does), instead of asking for one page.
+- [ ] Translated editions: the Portuguese Basic Set keeps the English chapter pages but sorts
+  advantages, skills and spells by their Portuguese names, so GCS refs to those land on the wrong page.
+- [ ] Link the page references in the sheet's own notes and tooltips (e.g. "B8, B494" in the reaction notes).
+
 ## Storage
 
 Characters live in each browser's IndexedDB, which the browser or player can clear.

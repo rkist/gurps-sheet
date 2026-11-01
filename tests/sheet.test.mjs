@@ -1,6 +1,6 @@
 // End-to-end tests: the real Roll20 GURPS sheet running in headless Chrome.
 import assert from 'node:assert/strict';
-import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
@@ -25,6 +25,7 @@ import {
   sleep,
   startServer,
   toggleEditMode,
+  typeInto,
   value,
 } from './helpers.mjs';
 
@@ -45,6 +46,28 @@ function byPosition({ attrs, sections }) {
 
 const savedCharacter = (page) =>
   page.evaluate(async (id) => (await import(new URL('js/store.js', location.href).href)).getCharacter(id), new URL(page.url()).hash.slice(4));
+// A PDF of `count` pages, each saying its page number.
+function testPdf(count) {
+  const objects = ['<< /Type /Catalog /Pages 2 0 R >>', '', '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>'];
+  const kids = [];
+  for (let n = 1; n <= count; n++) {
+    const text = `BT /F1 36 Tf 72 700 Td (PDF page ${n}) Tj ET`;
+    objects.push(`<< /Length ${text.length} >>\nstream\n${text}\nendstream`);
+    objects.push(`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${objects.length} 0 R >>`);
+    kids.push(`${objects.length} 0 R`);
+  }
+  objects[1] = `<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${count} >>`;
+  let pdf = '%PDF-1.4\n';
+  const offsets = objects.map((body, i) => {
+    const offset = pdf.length;
+    pdf += `${i + 1} 0 obj\n${body}\nendobj\n`;
+    return offset;
+  });
+  const xref = pdf.length;
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n${offsets.map((o) => `${String(o).padStart(10, '0')} 00000 n \n`).join('')}`;
+  return `${pdf}trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF\n`;
+}
+
 const newCharacterInNode = (sheet) => ({ id: 'c-node', attrs: { ...sheet.newCharacterAttrs, character_name: 'New character' }, sections: {} });
 
 describe('GURPS sheet', { skip }, () => {
@@ -309,6 +332,62 @@ describe('GURPS sheet', { skip }, () => {
     const footer = await page.$eval('#sheet-host [data-i18n="gurps-4th-edition-wiki-button"]', (el) => el.closest('.logo').textContent);
     assert.match(footer, /GURPS 4th Edition Roll20 Wiki Page/, 'the wiki link stays');
     assert.doesNotMatch(footer, /trademark|feedback|forum|discord/i, 'the trademark notice, forum and Discord lines are left out');
+    await close();
+  });
+
+  test('opens a Ref’s page in the player’s own PDF', { timeout: TIMEOUT }, async () => {
+    const page = await open();
+    const dir = await mkdtemp(path.join(os.tmpdir(), 'gurps-sheet-test-'));
+    try {
+      const pdf = path.join(dir, 'GURPS Magic.pdf');
+      await writeFile(pdf, testPdf(30));
+      const ref = '#sheet-host .repcontainer[data-groupname="repeating_traits"] input[name="attr_ref"]';
+      const focusRef = () =>
+        page.evaluate((sel) => {
+          const el = [...document.querySelectorAll(sel)].find((e) => e.offsetParent);
+          el.scrollIntoView({ block: 'center' });
+          el.focus();
+        }, ref);
+      const links = () => page.$eval('#ref-links', (el) => (el.hidden ? null : [...el.children].map((b) => b.textContent)));
+
+      await newCharacter(page);
+      await showTab(page, '2');
+      await addRow(page, 'traits');
+      await typeInto(page, ref, 'M23, B243');
+      assert.equal(await links(), null, 'the popover goes with the focus');
+      await focusRef();
+      assert.deepEqual(await links(), ['No PDF for M, B']);
+
+      await page.click('#ref-links .app-ref-missing');
+      await page.waitForSelector('#books-dialog[open]');
+      const [chooser] = await Promise.all([page.waitForFileChooser(), page.click('#books-dialog [data-action="add"]')]);
+      await chooser.accept([pdf]);
+      await page.waitForSelector('#books-dialog .app-book');
+      assert.equal(await value(page, '#books-dialog [name="code"]'), 'M', 'the code comes from the file name');
+      await typeInto(page, '#books-dialog [name="pdf"]', 3); // printed page 1 is PDF page 3
+      await page.click('#books-dialog button[type="submit"]');
+
+      await focusRef();
+      assert.deepEqual(await links(), ['M23', 'No PDF for B']);
+      // From the keyboard: the down arrow reaches the links.
+      await page.keyboard.press('ArrowDown');
+      assert.equal(await page.evaluate(() => document.activeElement.textContent), 'M23');
+      const opened = new Promise((resolve) => app.context.once('targetcreated', resolve));
+      await page.keyboard.press('Enter');
+      const tab = await opened;
+      assert.match(tab.url(), /^blob:http.*#page=25$/);
+      await (await tab.page()).close(); // the context doesn't close while a PDF is open
+
+      // The PDF stays in the browser.
+      await page.reload({ waitUntil: 'networkidle0' });
+      await page.waitForFunction(() => document.body.dataset.view === 'sheet');
+      await page.click('#open-books');
+      await page.waitForSelector('#books-dialog .app-book');
+      assert.equal(await value(page, '#books-dialog .app-book-name'), 'GURPS Magic.pdf');
+      assert.equal(await value(page, '#books-dialog [name="pdf"]'), '3');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
     await close();
   });
 

@@ -1,11 +1,15 @@
-// Minimal static file server for the GURPS sheet builder. No dependencies.
-// Characters live in each player's browser, so the server only serves files:
-// the app from public/ and the vendored Roll20 sheet from GURPS/ at /sheet/.
+// Minimal server for the GURPS sheet builder. No dependencies. It serves the
+// app from public/ and the vendored Roll20 sheet from GURPS/ at /sheet/. With
+// STORAGE_DIR or a Google Drive folder configured it also keeps the group's
+// shared character library (lib/storage.mjs) behind /api/ (lib/api.mjs);
+// without one, characters live only in each player's browser.
 import http from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { handleApi } from './lib/api.mjs';
+import { libraryFromEnv } from './lib/storage.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const appRoot = path.join(here, 'public');
@@ -46,6 +50,28 @@ const csp = [
 
 const gzCache = new Map();
 
+let library;
+try {
+  library = libraryFromEnv(process.env);
+} catch (err) {
+  console.error(`Character library: ${err.message}`);
+  process.exit(1);
+}
+
+// The files are served while the library loads; a failed load (e.g. Drive
+// unreachable) is retried, and /api/ answers 503 until it works.
+async function loadLibrary(delay = 5000) {
+  try {
+    await library.load();
+    const count = library.list().length;
+    console.log(`Character library: ${count} character${count === 1 ? '' : 's'} in ${library.describe()}`);
+  } catch (err) {
+    console.error(`Character library: could not load ${library.describe()}, retrying in ${delay / 1000}s:`, err.message);
+    setTimeout(() => loadLibrary(Math.min(delay * 2, 300_000)), delay).unref();
+  }
+}
+if (library) loadLibrary();
+
 // An error in one request (e.g. a file that can't be read) must not stop the server.
 const server = http.createServer((req, res) => {
   handle(req, res).catch((err) => {
@@ -56,17 +82,19 @@ const server = http.createServer((req, res) => {
 });
 
 async function handle(req, res) {
-  if (req.method !== 'GET' && req.method !== 'HEAD') {
-    res.writeHead(405, { Allow: 'GET, HEAD' });
-    res.end();
-    return;
-  }
-
   let pathname;
   try {
     pathname = decodeURIComponent(new URL(req.url, 'http://localhost').pathname);
   } catch {
     res.writeHead(400);
+    res.end();
+    return;
+  }
+
+  if (pathname.startsWith('/api/')) return handleApi(req, res, pathname, library);
+
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.writeHead(405, { Allow: 'GET, HEAD' });
     res.end();
     return;
   }
@@ -138,6 +166,7 @@ server.listen(port, host, () => {
 // so `docker stop` would wait for its timeout and then kill the server.
 for (const signal of ['SIGTERM', 'SIGINT']) {
   process.on(signal, () => {
+    library?.close();
     server.close(() => process.exit(0));
     server.closeIdleConnections?.();
     setTimeout(() => process.exit(0), 3000).unref();

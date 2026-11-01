@@ -9,6 +9,7 @@ LABEL org.opencontainers.image.title="GURPS Sheet" \
 WORKDIR /app
 # Owned by root and read-only to the server, which runs as `node`.
 COPY package.json server.mjs ./
+COPY lib ./lib
 COPY public ./public
 COPY GURPS ./GURPS
 

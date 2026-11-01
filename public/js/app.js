@@ -1,12 +1,11 @@
 // App shell: character list, open/save, import/export, language.
 import { loadSheet, LANGUAGES, LANGUAGE_TAGS } from './sheet-loader.js';
 import { SheetView } from './sheet-view.js';
-import { isRowId, parseRepeating, UNSAFE_KEYS } from './names.js';
+import { displayName, FORMAT, newCharacterId, sanitizeCharacter, slug } from './characters.js';
 import { answerQueries, buildRoll, expandAttributes, findQueries } from './roll20.js';
 import { askQueries, RollPanel } from './roll-ui.js';
 import * as store from './store.js';
 
-const FORMAT = 'gurps-sheet-server/characters';
 const LANGUAGE_KEY = 'gurps-sheets.language';
 const $ = (id) => document.getElementById(id);
 
@@ -52,21 +51,6 @@ function setView(name) {
   document.body.dataset.view = name;
   $('home-view').hidden = name !== 'home';
   $('sheet-view').hidden = name !== 'sheet';
-}
-
-function displayName(attrs) {
-  return String(attrs.character_name ?? '').trim() || 'Unnamed character';
-}
-
-function slug(text) {
-  return (
-    String(text)
-      .normalize('NFKD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .toLowerCase() || 'character'
-  );
 }
 
 function download(filename, data) {
@@ -284,7 +268,7 @@ async function roll({ text, row }) {
 async function createCharacter() {
   const now = Date.now();
   const character = {
-    id: store.newCharacterId(),
+    id: newCharacterId(),
     name: 'New character',
     createdAt: now,
     updatedAt: now,
@@ -325,42 +309,6 @@ async function exportAll() {
   if (!characters.length) return;
   const day = new Date().toISOString().slice(0, 10);
   download(`gurps-characters-${day}.json`, exportPayload(characters));
-}
-
-function sanitizeCharacter(raw) {
-  if (!raw || typeof raw.attrs !== 'object' || raw.attrs === null) return null;
-
-  const attrs = {};
-  for (const [k, v] of Object.entries(raw.attrs)) {
-    const key = String(k).toLowerCase();
-    if (UNSAFE_KEYS.has(key)) continue;
-    if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') attrs[key] = v;
-  }
-
-  const sections = {};
-  for (const [k, ids] of Object.entries(raw.sections || {})) {
-    const key = String(k).toLowerCase();
-    if (!/^repeating_[^_]+$/.test(key) || !Array.isArray(ids)) continue;
-    sections[key] = [...new Set(ids.map((id) => String(id).toLowerCase()).filter(isRowId))];
-  }
-  // Rows that have values but were missing from the order list.
-  for (const key of Object.keys(attrs)) {
-    const p = parseRepeating(key);
-    if (!p?.rowId || !isRowId(p.rowId)) continue;
-    const rows = (sections[p.section] ||= []);
-    if (!rows.includes(p.rowId)) rows.push(p.rowId);
-  }
-
-  const now = Date.now();
-  return {
-    id: store.newCharacterId(),
-    name: displayName(attrs),
-    attrs,
-    sections,
-    createdAt: Number(raw.createdAt) || now,
-    updatedAt: now,
-    sheetVersion: String(raw.sheetVersion || ''),
-  };
 }
 
 async function importFile(file) {

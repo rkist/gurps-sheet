@@ -34,7 +34,3 @@ export async function listCharacters() {
 export const getCharacter = (id) => run('readonly', (s) => s.get(id));
 export const putCharacter = (character) => run('readwrite', (s) => s.put(character));
 export const deleteCharacter = (id) => run('readwrite', (s) => s.delete(id));
-
-export function newCharacterId() {
-  return 'c-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
-}

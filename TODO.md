@@ -31,4 +31,6 @@ Roll20's Pictos and dice fonts are proprietary, so their glyphs are mapped to Un
 Characters live in each browser's IndexedDB, which the browser or player can clear.
 
 - [ ] Remind players to back up (for example, show the last export date and nudge after a while).
-- [ ] Optional server-side storage, so characters survive cleared browser data and can be shared with the GM.
+- [x] Server-side shared library in a Google Drive folder (or a directory), append-only with history (`lib/storage.mjs`, `/api/characters`).
+- [ ] The app lists, opens and saves characters in the shared library when the server has one.
+- [ ] An MCP endpoint, so each player's Claude can read and edit characters and give Roll20 commands.

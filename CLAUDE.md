@@ -13,8 +13,9 @@ and the server and app have zero runtime dependencies (Node 18+).
 
 ```sh
 npm start                      # http://localhost:8080 (PORT, HOST env vars)
+STORAGE_DIR=./library npm start  # with a shared character library in a local directory
 npm install && npm test        # all tests; puppeteer-core drives a local Chrome (CHROME_PATH if not found)
-node --test tests/roll20.test.mjs                                        # unit tests only, no Chrome
+node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs  # no Chrome needed
 node --test --test-name-pattern="skill levels" tests/sheet.test.mjs      # one browser test
 TEST_URL=http://localhost:8080/ npm test                                 # against an already-running server
 make test-docker               # build the image, run it locked down, run the tests against it (what CI runs)
@@ -24,7 +25,8 @@ make publish VERSION=1.0.0     # a specific version
 ```
 
 Browser tests in `tests/sheet.test.mjs` are skipped when no Chrome is found. They start the server on
-a free port and use a fresh browser context per test.
+a free port and use a fresh browser context per test. `startServer({ env })` in `tests/helpers.mjs`
+passes extra environment, e.g. `STORAGE_DIR`; `tests/api.test.mjs` is skipped under `TEST_URL`.
 
 ## Architecture
 
@@ -67,6 +69,19 @@ imports it directly. The output syntax was checked in a real Roll20 game: succes
 check each die) and must never succeed itself, so `buildRoll` uses `F = max(99, N + 1)`. Damage is
 `/roll {1d6[Label]+2, {0}}kh1`.
 
+**Shared character library** (optional; `lib/`). With `STORAGE_DIR` or `DRIVE_FOLDER_ID` plus
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`/`GOOGLE_REFRESH_TOKEN`, `server.mjs` loads a `Library`
+(`lib/storage.mjs`) over a `DirectoryFolder` or `DriveFolder` (`lib/drive.mjs`, plain `fetch` to the
+Drive REST API) and serves it through `lib/api.mjs` at `/api/characters`. It is **append-only on
+purpose** (there is no login, so history is the undo): every save creates a new
+`<slug>--<timestamp>.json` file, the newest file per character id is current, deletes add a
+`--deleted.json` tombstone, and nothing is ever overwritten or removed. Saves carry `baseVersion`;
+a stale one gets `ConflictError` / HTTP 409 with the current version. The index lives in memory and
+saves are serialized per character, so the server must run as one replica. Drive `properties`
+(`characterId`, `savedAt`, `name`, `deleted`) let the index load without reading file contents;
+files without them (exports dropped in by hand) are read once. `public/js/characters.js` (export
+format, `sanitizeCharacter`, ids, slugs) is shared by the app and the server.
+
 **Attribute names.** Stored lowercase. Repeating fields are `repeating_<section>_<rowId>_<field>`;
 section names never contain `_`, and row ids start with `-` and contain no `_` (the sheet splits on
 `_`). `parseRepeating` exists twice, in `names.js` and inside `roll20-worker.js` (a classic worker
@@ -85,6 +100,8 @@ script, so it can't import modules); keep them in sync.
   for the worker to go quiet and the save status to read "Saved".
 - `public/app.css` gives the sheet Roll20's base styles wrapped in `:where()` (zero specificity) so
   the sheet's own CSS always wins.
-- The Docker image copies only `package.json`, `server.mjs`, `public/` and `GURPS/`, and
+- The Docker image copies only `package.json`, `server.mjs`, `lib/`, `public/` and `GURPS/`, and
   `.dockerignore` whitelists the same paths; a new top-level runtime file needs both updated.
+- Server code imports DOM-free modules from `public/js/` (`characters.js`, `names.js`); keep those
+  free of browser globals.
 - The `Makefile` must work with GNU Make 3.81 (the macOS default).

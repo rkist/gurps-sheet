@@ -2,7 +2,9 @@
 // Chrome, and small helpers for driving the sheet.
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
 import net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import puppeteer from 'puppeteer-core';
@@ -52,8 +54,35 @@ export async function startServer({ env = {} } = {}) {
   return { url: `http://127.0.0.1:${port}/`, stop: () => child.kill() };
 }
 
+// A server with a shared library in a new temporary directory, once the library is ready.
+export async function startLibraryServer() {
+  const dir = await mkdtemp(path.join(os.tmpdir(), 'gurps-library-'));
+  const server = await startServer({ env: { STORAGE_DIR: dir } });
+  for (let i = 0; !(await (await fetch(new URL('api/library', server.url))).json()).ready; i++) {
+    if (i > 50) throw new Error('The library never loaded');
+    await sleep(100);
+  }
+  return {
+    url: server.url,
+    dir,
+    stop: async () => {
+      server.stop();
+      await rm(dir, { recursive: true, force: true });
+    },
+  };
+}
+
 export function launchBrowser() {
   return puppeteer.launch({ executablePath: chromePath, headless: true, args: ['--no-sandbox'] });
+}
+
+// Chrome can leave helpers running after it exits (e.g. Google Updater) that
+// hold on to its output pipes, which keeps the test process from ever exiting.
+export async function closeBrowser(browser) {
+  if (!browser) return;
+  const chrome = browser.process();
+  await browser.close();
+  for (const stream of chrome?.stdio || []) stream?.destroy();
 }
 
 // A fresh browser profile (empty IndexedDB) with the app's home page loaded.

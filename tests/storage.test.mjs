@@ -83,6 +83,7 @@ describe('character library', () => {
 
     assert.ok((await readdir(dir)).some((f) => /^sir-testalot--.*--deleted\.json$/.test(f)));
     assert.deepEqual(library.list(), []);
+    assert.deepEqual(library.deletedIds(), ['c-1']);
     assert.equal((await library.get('c-1')).deleted, true);
     assert.equal((await library.getVersion('c-1', v1.version)).character.name, 'Sir Testalot');
     assert.equal(await library.remove('c-nobody', null), null);
@@ -90,6 +91,7 @@ describe('character library', () => {
     // Saving on top of the deletion brings it back.
     await library.save('c-1', character('Sir Testalot'), deleted.version);
     assert.deepEqual(library.list().map((c) => c.id), ['c-1']);
+    assert.deepEqual(library.deletedIds(), []);
   });
 
   test('finds the same characters and history after a restart', async () => {

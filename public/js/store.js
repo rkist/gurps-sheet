@@ -1,4 +1,5 @@
-// Characters are kept in this browser's IndexedDB. Nothing is sent to the server.
+// Characters are kept in this browser's IndexedDB. When the server has a shared
+// library, these are this browser's copies (see app.js).
 
 const DB_NAME = 'gurps-sheets';
 const STORE = 'characters';

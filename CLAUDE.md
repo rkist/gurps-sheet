@@ -26,7 +26,8 @@ make publish VERSION=1.0.0     # a specific version
 
 Browser tests in `tests/sheet.test.mjs` are skipped when no Chrome is found. They start the server on
 a free port and use a fresh browser context per test. `startServer({ env })` in `tests/helpers.mjs`
-passes extra environment, e.g. `STORAGE_DIR`; `tests/api.test.mjs` is skipped under `TEST_URL`.
+passes extra environment, e.g. `STORAGE_DIR`, and `startLibraryServer()` starts one with a library in
+a temporary directory. `tests/api.test.mjs` and `tests/library.test.mjs` are skipped under `TEST_URL`.
 
 ## Architecture
 
@@ -81,6 +82,16 @@ saves are serialized per character, so the server must run as one replica. Drive
 (`characterId`, `savedAt`, `name`, `deleted`) let the index load without reading file contents;
 files without them (exports dropped in by hand) are read once. `public/js/characters.js` (export
 format, `sanitizeCharacter`, ids, slugs) is shared by the app and the server.
+
+With a library, `app.js` treats IndexedDB as each browser's copy: records also carry `shared`,
+`baseVersion` (the library version the copy is based on) and `pending` (changes not uploaded yet).
+Uploads go through `public/js/library.js` after 20 s idle, at most every 60 s, and when leaving the
+sheet or hiding the tab (keepalive); a 409 asks the player to keep theirs or load the other version,
+or, when leaving, waits until the character is opened again. Only player edits (`SheetView`'s
+`onEdit`) make a character pending, compared with `contentKey()`: the sheet's own open handlers
+rewrite some values (`0` → `"0.000"`), which would otherwise upload a version on every open.
+Normal flows must not get a 4xx (Chrome logs each one as a console error, which fails the tests),
+hence `GET /api/library` (always 200) and the `deleted` ids in the list.
 
 **Attribute names.** Stored lowercase. Repeating fields are `repeating_<section>_<rowId>_<field>`;
 section names never contain `_`, and row ids start with `-` and contain no `_` (the sheet splits on

@@ -55,9 +55,10 @@ export async function startServer({ env = {} } = {}) {
 }
 
 // A server with a shared library in a new temporary directory, once the library is ready.
-export async function startLibraryServer() {
+// `env` adds environment variables for the server, e.g. MCP_TOKEN.
+export async function startLibraryServer({ env = {} } = {}) {
   const dir = await mkdtemp(path.join(os.tmpdir(), 'gurps-library-'));
-  const server = await startServer({ env: { STORAGE_DIR: dir } });
+  const server = await startServer({ env: { ...env, STORAGE_DIR: dir } });
   for (let i = 0; !(await (await fetch(new URL('api/library', server.url))).json()).ready; i++) {
     if (i > 50) throw new Error('The library never loaded');
     await sleep(100);

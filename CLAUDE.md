@@ -93,7 +93,8 @@ rewrite some values (`0` → `"0.000"`), which would otherwise upload a version 
 Normal flows must not get a 4xx (Chrome logs each one as a console error, which fails the tests),
 hence `GET /api/library` (always 200) and the `deleted` ids in the list.
 
-**MCP server** (`/mcp`, only with a library). `lib/mcp.mjs` is a hand-written, stateless Streamable
+**MCP server** (`/mcp`, only with a library; with `MCP_TOKEN`, only for clients sending one of its
+comma-separated tokens as a Bearer header or as `/mcp/<token>`, compared in constant time). `lib/mcp.mjs` is a hand-written, stateless Streamable
 HTTP server (JSON answers, no SSE or sessions; protocol 2025-11-25/06-18/03-26) over the tools in
 `lib/mcp-tools.mjs`. Summaries (`lib/character-summary.mjs`) need the field defaults, since
 auto-calc fields (e.g. `point_summary`) are stored only as formulas there: `lib/sheet-html.mjs` scans

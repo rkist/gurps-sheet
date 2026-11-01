@@ -1,10 +1,10 @@
 // Mounts the prepared sheet markup for one character, keeps the DOM and the
 // attribute store in sync, and relays player actions to the sheet worker.
+import * as attributes from './attributes.js';
 import { computeAutocalc } from './autocalc.js';
-import { generateRowId, parseRepeating } from './names.js';
+import { generateRowId } from './names.js';
 
 const WORKER_URL = new URL('./roll20-worker.js', import.meta.url);
-const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj, key);
 // HTML "valid floating-point number", what <input type="number"> accepts.
 const VALID_NUMBER = /^-?(\d+(\.\d+)?|\.\d+)(e[-+]?\d+)?$/i;
 
@@ -138,27 +138,17 @@ export class SheetView {
   }
 
   defaultOf(key) {
-    const p = parseRepeating(key);
-    if (p && p.rowId !== null) {
-      const d = this.sheet.sectionDefaults[p.section];
-      return d && hasOwn(d, p.field) ? d[p.field] : undefined;
-    }
-    return hasOwn(this.sheet.defaults, key) ? this.sheet.defaults[key] : undefined;
+    return attributes.defaultOf(this.sheet, key);
   }
 
   valueOf(key) {
-    return key in this.attrs ? this.attrs[key] : this.defaultOf(key);
+    return attributes.valueOf(this.attrs, this.sheet, key);
   }
 
   // Inside a repeating row, @{field} means that row's field when the section has it.
   // Also used to fill in roll macros.
   lookup(name, row) {
-    const n = name.toLowerCase();
-    if (row) {
-      const full = `${row.section}_${row.rowId}_${n}`;
-      if (full in this.attrs || hasOwn(this.sheet.sectionDefaults[row.section] || {}, n)) return this.valueOf(full);
-    }
-    return this.valueOf(n);
+    return attributes.lookup(this.attrs, this.sheet, name, row);
   }
 
   queueRecompute() {

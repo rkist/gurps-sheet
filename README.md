@@ -6,7 +6,8 @@ unmodified, without the rest of Roll20.
 
 - Characters are saved in each player's browser (IndexedDB). Optionally the server keeps a
   [shared character library](#shared-character-library) in a Google Drive folder, so the whole group
-  sees the same characters, and every save is kept as a version.
+  sees the same characters, and every save is kept as a version. With the library, the server is
+  also an [MCP server](#claude-mcp), so each player's Claude can read the characters.
 - **Export** / **Import** move characters between browsers or devices as JSON. **Export all** makes a backup.
 - All of the sheet's own logic runs: derived stats, skill and spell levels, point totals, and the
   built-in GCA/GCS importers (gear tab → Import).
@@ -137,6 +138,23 @@ token. (A service account can't create files in a personal Drive folder.) One-ti
    the app right away and loads the library in the background, retrying if Drive can't be reached;
    `/api/` answers 503 until then.
 
+## Claude (MCP)
+
+With a library, the server is also a remote [MCP](https://modelcontextprotocol.io) server at `/mcp`, so
+anyone in the group can ask their Claude about the characters. It reads the same library as the app:
+
+| Tool | |
+| --- | --- |
+| `list_characters` | The characters in the library |
+| `get_character` | A summary with the levels the sheet computes: points, attributes, traits, skills, techniques, spells, attacks, defenses, equipment. `detail: "attributes"` gives the raw sheet attributes. |
+| `get_character_history`, `get_character_version` | Every saved version, and any one of them |
+| `sheet_fields` | The sheet's fields: names, types, choices and defaults |
+
+Add it in Claude Code with `claude mcp add --transport http gurps https://gurps.example.com/mcp`, or
+in claude.ai under Settings → Connectors → Add custom connector. Like the app, it has no login. It
+answers only POST requests with JSON (no event stream or sessions), and refuses requests from web
+pages (those carry an `Origin` header, which MCP clients like Claude don't send).
+
 ### Moving to a new address
 
 Browsers keep saved data per address (scheme, host and port). If the app moves, for example from
@@ -149,11 +167,11 @@ address. Have everyone use **Export all** at the old address and **Import** at t
 | --- | --- |
 | `GURPS/` | Unmodified copy of the `GURPS` folder from [Roll20/roll20-character-sheets](https://github.com/Roll20/roll20-character-sheets). Two files are added: `LICENSE` (Roll20's MIT license) and `UPSTREAM.json` (the upstream commit and sheet version it was copied from). Served at `/sheet/`. |
 | `public/` | The app: `index.html`, `app.css` and the JavaScript in `public/js/`. |
-| `server.mjs` | Dependency-free server: static files with gzip and a strict Content Security Policy, plus the library API when one is configured. |
-| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). |
+| `server.mjs` | Dependency-free server: static files with gzip and a strict Content Security Policy, plus the library API and the MCP server when a library is configured. |
+| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). The MCP server: `mcp.mjs` (protocol), `mcp-tools.mjs` (tools), `character-summary.mjs`, and `sheet-html.mjs`, which reads the sheet's fields and defaults from `GURPS/` without a browser. |
 | `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `drive-auth.mjs` gets the Google Drive refresh token. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
 | `Makefile` | Shortcuts for the common commands. `make` lists them. |
-| `tests/` | End-to-end tests that drive the app in headless Chrome. |
+| `tests/` | End-to-end tests that drive the app in headless Chrome, and unit tests of the server parts. `fixtures/` has a character made with the sheet's GCS importer. |
 | `Dockerfile`, `compose.yaml` | The container image, and a Compose file that builds and runs it. |
 | `.github/` | CI that builds the image, runs the tests against it and publishes it to GHCR, plus Dependabot for the base image and actions. |
 | `TODO.md` | Known limitations and planned work. |
@@ -182,12 +200,14 @@ npm test
 ```
 
 `TEST_URL=http://localhost:8080/ npm test` runs them against a server that is already running instead
-(the library API tests need a server of their own with a library, so they are skipped then).
+(the library API, MCP and library browser tests need a server of their own, so they are skipped then).
 `make test-docker` builds the image, starts it locked down like `compose.yaml` and runs the tests
 against it. CI does the same for every pull request.
 
-Unit tests cover the shared library (on a directory, and against a fake Drive API) and its HTTP API,
-and browser tests run the app with a library as two players (sharing, conflicts, uploading, deleting).
+Unit tests cover the shared library (on a directory, and against a fake Drive API), its HTTP API, the
+MCP server, and the server's reading of the sheet markup (a browser test checks that it finds the same
+field defaults as the app). Browser tests run the app with a library as two players (sharing,
+conflicts, uploading, deleting).
 The browser tests cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the
 sheet's built-in GCS importer, and the Roll20 commands of the roll buttons. Every test also fails on any console error or
@@ -204,7 +224,7 @@ functions, so the sheet's code runs as-is.
 | `public/js/roll20-worker.js` | Stand-in for Roll20's sheet-worker runtime. Runs in a Web Worker, owns the attribute store, implements the Roll20 API and event behaviour, then loads the sheet's worker code with `importScripts()`. |
 | `public/js/sheet-loader.js` | Loads `gurps.html` / `gurps.css`, splits out the worker code, and prepares the markup the way Roll20's legacy pipeline does: `sheet-` class prefixes, translations, field defaults and icon-font stand-ins. It also closes a few unclosed `<b>` tags that would otherwise make inactive tabs show. |
 | `public/js/sheet-view.js` | Mounts the sheet for one character, binds every `attr_*` field, builds repeating sections (add, modify, delete, drag to reorder), computes auto-calculated fields, and passes edits and button clicks to the worker. |
-| `public/js/autocalc.js` | Evaluates Roll20 auto-calc formulas such as `round(2 * @{basic_lift})` without `eval`. |
+| `public/js/autocalc.js`, `public/js/attributes.js` | Evaluate Roll20 auto-calc formulas such as `round(2 * @{basic_lift})` without `eval`, and read attributes the way the sheet shows them (stored value, else the field default; `@{field}` in a row means that row's field). Shared with the server. |
 | `public/js/roll20.js`, `public/js/roll-ui.js` | Turn a roll button's macro into Roll20 chat commands: fill in `@{attributes}`, ask its `?{prompts}`, work out the target number, and list the commands to copy. |
 | `public/js/app.js`, `public/js/store.js`, `public/js/library.js` | Character list, saving, import/export, language, and syncing with the shared library. |
 | `public/js/characters.js` | The export format and the clean-up of characters from files or the network, shared with the server. |

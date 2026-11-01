@@ -34,4 +34,5 @@ Characters live in each browser's IndexedDB, which the browser or player can cle
 - [x] Server-side shared library in a Google Drive folder (or a directory), append-only with history (`lib/storage.mjs`, `/api/characters`).
 - [x] The app lists, opens and saves characters in the shared library when the server has one.
 - [ ] Show a character's history in the app, and restore an old version (the API has it: `/api/characters/:id/versions`).
-- [ ] An MCP endpoint, so each player's Claude can read and edit characters and give Roll20 commands.
+- [x] An MCP endpoint, so each player's Claude can read characters (`/mcp`, `lib/mcp.mjs`).
+- [ ] MCP: Roll20 commands for any roll button, and creating, editing and importing characters, by running the sheet worker in Node.

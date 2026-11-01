@@ -4,6 +4,7 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { loadSheetInfo } from '../lib/sheet-html.mjs';
 import {
   addRow,
   chromePath,
@@ -254,6 +255,22 @@ describe('GURPS sheet', { skip }, () => {
     const footer = await page.$eval('#sheet-host [data-i18n="gurps-4th-edition-wiki-button"]', (el) => el.closest('.logo').textContent);
     assert.match(footer, /GURPS 4th Edition Roll20 Wiki Page/, 'the wiki link stays');
     assert.doesNotMatch(footer, /trademark|feedback|forum|discord/i, 'the trademark notice, forum and Discord lines are left out');
+    await close();
+  });
+
+  test('gives the server the same field defaults as the browser', { timeout: TIMEOUT }, async () => {
+    const page = await open();
+    const inBrowser = await page.evaluate(async () => {
+      const { loadSheet } = await import(new URL('js/sheet-loader.js', location.href).href);
+      const { defaults, sectionDefaults, workerUrl } = await loadSheet('en');
+      URL.revokeObjectURL(workerUrl);
+      return { defaults, sectionDefaults };
+    });
+    const onServer = loadSheetInfo();
+    // In the browser, a tooltip's markup is replaced by its English translation,
+    // which has a typo (value"0") that leaves this hidden field without a default.
+    assert.deepEqual({ ...inBrowser.defaults, spell_on_count: '0' }, onServer.defaults);
+    assert.deepEqual(inBrowser.sectionDefaults, onServer.sectionDefaults);
     await close();
   });
 

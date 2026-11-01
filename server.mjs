@@ -1,14 +1,18 @@
 // Minimal server for the GURPS sheet builder. No dependencies. It serves the
 // app from public/ and the vendored Roll20 sheet from GURPS/ at /sheet/. With
 // STORAGE_DIR or a Google Drive folder configured it also keeps the group's
-// shared character library (lib/storage.mjs) behind /api/ (lib/api.mjs);
-// without one, characters live only in each player's browser.
+// shared character library (lib/storage.mjs) behind /api/ (lib/api.mjs), and
+// an MCP server at /mcp (lib/mcp.mjs) through which Claude reads it; without
+// one, characters live only in each player's browser.
 import http from 'node:http';
+import { readFileSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi } from './lib/api.mjs';
+import { handleMcp } from './lib/mcp.mjs';
+import { loadSheetInfo } from './lib/sheet-html.mjs';
 import { libraryFromEnv } from './lib/storage.mjs';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -16,6 +20,7 @@ const appRoot = path.join(here, 'public');
 const sheetRoot = path.join(here, 'GURPS');
 const port = Number(process.env.PORT) || 8080;
 const host = process.env.HOST || '0.0.0.0';
+const { version } = JSON.parse(readFileSync(path.join(here, 'package.json'), 'utf8'));
 
 const types = {
   '.html': 'text/html; charset=utf-8',
@@ -70,7 +75,10 @@ async function loadLibrary(delay = 5000) {
     setTimeout(() => loadLibrary(Math.min(delay * 2, 300_000)), delay).unref();
   }
 }
-if (library) loadLibrary();
+if (library) {
+  loadLibrary();
+  loadSheetInfo(); // for /mcp, read once now rather than on the first request
+}
 
 // An error in one request (e.g. a file that can't be read) must not stop the server.
 const server = http.createServer((req, res) => {
@@ -92,6 +100,7 @@ async function handle(req, res) {
   }
 
   if (pathname.startsWith('/api/')) return handleApi(req, res, pathname, library);
+  if (pathname === '/mcp') return handleMcp(req, res, { library, sheet: loadSheetInfo, version });
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });

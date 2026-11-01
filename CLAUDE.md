@@ -15,7 +15,7 @@ and the server and app have zero runtime dependencies (Node 18+).
 npm start                      # http://localhost:8080 (PORT, HOST env vars)
 STORAGE_DIR=./library npm start  # with a shared character library in a local directory
 npm install && npm test        # all tests; puppeteer-core drives a local Chrome (CHROME_PATH if not found)
-node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs  # no Chrome needed
+node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs tests/mcp.test.mjs tests/sheet-html.test.mjs  # no Chrome needed
 node --test --test-name-pattern="skill levels" tests/sheet.test.mjs      # one browser test
 TEST_URL=http://localhost:8080/ npm test                                 # against an already-running server
 make test-docker               # build the image, run it locked down, run the tests against it (what CI runs)
@@ -93,6 +93,15 @@ rewrite some values (`0` → `"0.000"`), which would otherwise upload a version 
 Normal flows must not get a 4xx (Chrome logs each one as a console error, which fails the tests),
 hence `GET /api/library` (always 200) and the `deleted` ids in the list.
 
+**MCP server** (`/mcp`, only with a library). `lib/mcp.mjs` is a hand-written, stateless Streamable
+HTTP server (JSON answers, no SSE or sessions; protocol 2025-11-25/06-18/03-26) over the read-only
+tools in `lib/mcp-tools.mjs`. Summaries (`lib/character-summary.mjs`) need the field defaults, since
+auto-calc fields (e.g. `point_summary`) are stored only as formulas there: `lib/sheet-html.mjs` scans
+`GURPS/gurps.html` with a tokenizer that follows the HTML spec (the markup has stray quotes such as
+`title=""x"`), and a browser test in `tests/sheet.test.mjs` checks its defaults against `loadSheet()`.
+`public/js/attributes.js` (value / default / row-aware lookup / auto-calc) is shared by `SheetView`
+and the server. `tests/fixtures/artillery-mage.json` is the sheet's GCS sample imported in the app.
+
 **Attribute names.** Stored lowercase. Repeating fields are `repeating_<section>_<rowId>_<field>`;
 section names never contain `_`, and row ids start with `-` and contain no `_` (the sheet splits on
 `_`). `parseRepeating` exists twice, in `names.js` and inside `roll20-worker.js` (a classic worker
@@ -113,6 +122,6 @@ script, so it can't import modules); keep them in sync.
   the sheet's own CSS always wins.
 - The Docker image copies only `package.json`, `server.mjs`, `lib/`, `public/` and `GURPS/`, and
   `.dockerignore` whitelists the same paths; a new top-level runtime file needs both updated.
-- Server code imports DOM-free modules from `public/js/` (`characters.js`, `names.js`); keep those
-  free of browser globals.
+- Server code imports DOM-free modules from `public/js/` (`characters.js`, `names.js`,
+  `attributes.js`, `autocalc.js`); keep those free of browser globals.
 - The `Makefile` must work with GNU Make 3.81 (the macOS default).

@@ -11,7 +11,7 @@ import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi } from './lib/api.mjs';
-import { handleMcp } from './lib/mcp.mjs';
+import { handleMcp, mcpTokensFromEnv } from './lib/mcp.mjs';
 import { loadSheetInfo } from './lib/sheet-html.mjs';
 import { libraryFromEnv } from './lib/storage.mjs';
 
@@ -75,15 +75,34 @@ async function loadLibrary(delay = 5000) {
     setTimeout(() => loadLibrary(Math.min(delay * 2, 300_000)), delay).unref();
   }
 }
+
+let mcpTokens;
+try {
+  mcpTokens = mcpTokensFromEnv(process.env);
+} catch (err) {
+  console.error(`MCP_TOKEN: ${err.message}`);
+  process.exit(1);
+}
+
 if (library) {
   loadLibrary();
   loadSheetInfo(); // for /mcp, read once now rather than on the first request
 }
 
+// The request's URL for the log, without an MCP token however its path is encoded.
+function loggedUrl(req) {
+  try {
+    if (decodeURIComponent(new URL(req.url, 'http://localhost').pathname).startsWith('/mcp/')) return '/mcp/…';
+  } catch {
+    // not a valid URL; handle() answered 400
+  }
+  return req.url;
+}
+
 // An error in one request (e.g. a file that can't be read) must not stop the server.
 const server = http.createServer((req, res) => {
   handle(req, res).catch((err) => {
-    console.error(`${req.method} ${req.url} failed:`, err);
+    console.error(`${req.method} ${loggedUrl(req)} failed:`, err);
     if (!res.headersSent) res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
     res.end(res.headersSent ? undefined : 'Server error');
   });
@@ -100,7 +119,9 @@ async function handle(req, res) {
   }
 
   if (pathname.startsWith('/api/')) return handleApi(req, res, pathname, library);
-  if (pathname === '/mcp') return handleMcp(req, res, { library, sheet: loadSheetInfo, version });
+  if (pathname === '/mcp' || pathname.startsWith('/mcp/')) {
+    return handleMcp(req, res, { library, sheet: loadSheetInfo, version, tokens: mcpTokens, pathname });
+  }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {
     res.writeHead(405, { Allow: 'GET, HEAD' });

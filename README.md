@@ -162,9 +162,24 @@ so the history keeps what was there before. One sheet runs at a time, for up to 
 requests waiting, or 60 run in the last minute, others are turned away until it has caught up.
 
 Add it in Claude Code with `claude mcp add --transport http gurps https://gurps.example.com/mcp`, or
-in claude.ai under Settings → Connectors → Add custom connector. Like the app, it has no login. It
-answers only POST requests with JSON (no event stream or sessions), and refuses requests from web
-pages (those carry an `Origin` header, which MCP clients like Claude don't send).
+in claude.ai under Settings → Connectors → Add custom connector. It answers only POST requests with
+JSON (no event stream or sessions), and refuses requests from web pages (those carry an `Origin`
+header, which MCP clients like Claude don't send).
+
+### Token
+
+Like the app, `/mcp` is open to anyone who can reach it, unless `MCP_TOKEN` is set. Then only clients
+with the token get in, so share it with the group only. Make one with
+`node -e "console.log(require('node:crypto').randomBytes(24).toString('base64url'))"`; it takes letters, digits, `-`
+and `_`, at least 16. Several tokens separated by commas also work, e.g. one per player, so one can be
+taken back without changing the others'. Clients send it either way:
+
+- at the end of the URL, for claude.ai, whose connectors only take a URL:
+  `https://gurps.example.com/mcp/<token>`
+- as a header, in Claude Code:
+  `claude mcp add --transport http gurps https://gurps.example.com/mcp --header "Authorization: Bearer <token>"`
+
+The token covers only `/mcp`: the app and its `/api/` stay open, as before.
 
 ### Moving to a new address
 

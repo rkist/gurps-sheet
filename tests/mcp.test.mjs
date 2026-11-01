@@ -3,12 +3,13 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { mcpTokensFromEnv } from '../lib/mcp.mjs';
 import { projectRoot, startLibraryServer, startServer } from './helpers.mjs';
 
 const skip = process.env.TEST_URL ? 'needs its own server with a library' : false;
 
-async function post(base, body, headers = {}) {
-  const res = await fetch(new URL('mcp', base), {
+async function post(base, body, headers = {}, endpoint = 'mcp') {
+  const res = await fetch(new URL(endpoint, base), {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', ...headers },
     body: typeof body === 'string' ? body : JSON.stringify(body),
@@ -233,6 +234,54 @@ describe('MCP server', { skip }, () => {
     assert.equal((await post(server.url, ping, { Origin: new URL(server.url).origin })).status, 403);
     assert.equal((await post(server.url, ping, { 'MCP-Protocol-Version': '1999-01-01' })).status, 400);
     assert.equal((await post(server.url, ping, { 'MCP-Protocol-Version': '2025-06-18' })).status, 200);
+    assert.equal((await post(server.url, ping, {}, 'mcp/some-token-0123456789')).status, 404, 'no token is set');
+  });
+});
+
+describe('MCP server with tokens', { skip }, () => {
+  const first = 'first-token_0123456789';
+  const second = 'second-token-0123456789';
+  const ping = { jsonrpc: '2.0', id: 1, method: 'ping' };
+  let server;
+
+  before(async () => {
+    server = await startLibraryServer({ env: { MCP_TOKEN: ` ${first}, ${second} ` } });
+  });
+
+  after(() => server?.stop());
+
+  test('lets in only clients with a token', async () => {
+    const none = await post(server.url, ping);
+    assert.equal(none.status, 401);
+    assert.equal(none.headers.get('www-authenticate'), 'Bearer realm="gurps-sheet"');
+    assert.match(none.body.error, /needs its token/);
+    assert.equal((await post(server.url, ping, { Authorization: 'Bearer wrong-token-0123456789' })).status, 401);
+    assert.equal((await post(server.url, ping, {}, 'mcp/wrong-token-0123456789')).status, 401);
+    assert.equal((await post(server.url, ping, {}, `mcp/${first}/more`)).status, 401);
+  });
+
+  test('takes any of its tokens, in the header or the URL', async () => {
+    assert.deepEqual((await post(server.url, ping, { Authorization: `Bearer ${first}` })).body.result, {});
+    assert.deepEqual((await post(server.url, ping, { Authorization: `bearer ${second}` })).body.result, {});
+    assert.deepEqual((await post(server.url, ping, {}, `mcp/${second}`)).body.result, {});
+    assert.deepEqual((await post(server.url, ping, {}, `mcp%2F${first}`)).body.result, {}, 'the path is decoded first');
+    const call = { jsonrpc: '2.0', id: 2, method: 'tools/call', params: { name: 'list_characters', arguments: {} } };
+    assert.match((await post(server.url, call, {}, `mcp/${first}`)).body.result.content[0].text, /no characters/);
+  });
+
+  test('still refuses web pages', async () => {
+    assert.equal((await post(server.url, ping, { Origin: 'https://evil.example' }, `mcp/${first}`)).status, 403);
+  });
+});
+
+describe('MCP_TOKEN', () => {
+  test('lists the tokens, and refuses short or URL-unsafe ones', () => {
+    assert.deepEqual(mcpTokensFromEnv({}), []);
+    assert.deepEqual(mcpTokensFromEnv({ MCP_TOKEN: ' ' }), []);
+    assert.throws(() => mcpTokensFromEnv({ MCP_TOKEN: ' , ' }), /no token/, 'not open by mistake');
+    assert.deepEqual(mcpTokensFromEnv({ MCP_TOKEN: 'abcdefghijklmnop, ,qrstuvwxyz-_0123' }), ['abcdefghijklmnop', 'qrstuvwxyz-_0123']);
+    assert.throws(() => mcpTokensFromEnv({ MCP_TOKEN: 'short' }), /at least 16/);
+    assert.throws(() => mcpTokensFromEnv({ MCP_TOKEN: 'has/a/slash/0123456789' }), /at least 16/);
   });
 });
 

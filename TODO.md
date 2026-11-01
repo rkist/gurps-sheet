@@ -35,6 +35,13 @@ Roll20's Pictos and dice fonts are proprietary, so their glyphs are mapped to Un
   advantages, skills and spells by their Portuguese names, so GCS refs to those land on the wrong page.
 - [ ] Link the page references in the sheet's own notes and tooltips (e.g. "B8, B494" in the reaction notes).
 
+## Rules
+
+- [x] Turn GURPS PDFs with a text layer into Markdown, a marker per printed page (`scripts/book-to-markdown.mjs`).
+- [ ] MCP tools to search and read the rules (`search_rules`, `read_rules`), only when `MCP_TOKEN` is set, from a private folder.
+- [ ] Scans without text (the Portuguese Basic Set): OCR with macOS Vision. Its faded stat lines (cost, duration) come out garbled.
+- [ ] Keep a paragraph whole when a box in the middle of the page cuts it.
+
 ## Storage
 
 Characters live in each browser's IndexedDB, which the browser or player can clear.

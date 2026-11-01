@@ -4,7 +4,9 @@ A self-hosted GURPS 4th Edition character builder for a gaming group. It runs th
 [Roll20 GURPS character sheet](https://github.com/Roll20/roll20-character-sheets/tree/master/GURPS)
 unmodified, without the rest of Roll20.
 
-- Characters are saved in each player's browser (IndexedDB). The server only serves files.
+- Characters are saved in each player's browser (IndexedDB). Optionally the server also keeps a
+  [shared character library](#shared-character-library) in a Google Drive folder, where every save
+  is a new file, so the history is kept.
 - **Export** / **Import** move characters between browsers or devices as JSON. **Export all** makes a backup.
 - All of the sheet's own logic runs: derived stats, skill and spell levels, point totals, and the
   built-in GCA/GCS importers (gear tab → Import).
@@ -25,8 +27,9 @@ npm start        # http://localhost:8080
 ```
 
 `PORT` and `HOST` environment variables change where it listens. The server has no login, so put it
-behind a reverse proxy or a VPN (e.g. Tailscale) if it shouldn't be public. Characters live in the
-browsers, so there is no shared data on the server, but anyone who can reach it can use it.
+behind a reverse proxy or a VPN (e.g. Tailscale) if it shouldn't be public. Without the shared
+library, characters live in the browsers and there is no shared data on the server, but anyone who
+can reach it can use it.
 
 `make` lists shortcuts for the commands in this README.
 
@@ -39,8 +42,8 @@ docker compose up -d     # or `make up`; http://localhost:8080
 This builds the image from the checkout. After a `git pull`, run the same command again to rebuild.
 `GURPS_PORT=3000 docker compose up -d` (or `GURPS_PORT` in a `.env` file) changes the port.
 
-There are no volumes: characters live in the players' browsers, so the container has nothing to back
-up. It runs as a non-root user on a read-only filesystem with no Linux capabilities, has a health
+There are no volumes: characters live in the players' browsers, or in Google Drive with the shared
+library, so the container has nothing to back up. It runs as a non-root user on a read-only filesystem with no Linux capabilities, has a health
 check, and stops right away on `docker compose down`.
 
 ### Prebuilt image
@@ -69,6 +72,63 @@ tag, waits while CI tests the image and publishes it as `1.0.0` and `1.0`, and c
 release with generated notes. If CI fails, nothing is published and no release is created. The first
 release uses the version in `package.json`. Needs the [GitHub CLI](https://cli.github.com), logged in.
 
+## Shared character library
+
+With a library configured, the server keeps the group's characters in one place and serves them at
+`/api/characters`. A save never overwrites anything: it adds a file named after the character and the
+time, such as `sir-testalot--2026-10-31T21-04-05-123Z.json`. The newest file of a character is its
+current version and the older files are its history. Deleting adds a `...--deleted.json` file. Each
+file is a normal export, so any version can be downloaded and imported by hand, and exports dropped
+into the folder (one character per file) show up too. (The app doesn't use the library yet; see
+[TODO.md](TODO.md).)
+
+There is no login: anyone who can reach the server can read and change every character in the
+library. Because nothing is overwritten, every change can be undone from the history. Requests are
+capped at 1 MB and the server takes at most 60 saves a minute. Run a single instance, since it checks
+for conflicting saves in memory.
+
+| API | |
+| --- | --- |
+| `GET /api/characters` | The current version of every character |
+| `GET /api/characters/:id` | `{ version, savedAt, character }` |
+| `GET /api/characters/:id/versions` | The history, newest first; `/versions/:version` gets one |
+| `POST /api/characters/:id` | `{ character, baseVersion }` saves a new version. If `baseVersion` isn't the current version any more, nothing is saved and the answer is 409 with the current one. |
+| `DELETE /api/characters/:id` | `{ baseVersion }` marks the character deleted |
+
+To try it locally, keep the library in a directory:
+
+```sh
+STORAGE_DIR=./library npm start
+```
+
+### Google Drive
+
+The server signs in to Drive as a Google account that can edit the folder, with an OAuth refresh
+token. (A service account can't create files in a personal Drive folder.) One-time setup:
+
+1. In the [Google Cloud console](https://console.cloud.google.com/), create a project and enable the
+   **Google Drive API** for it.
+2. Under **Google Auth Platform**, set up the consent screen with audience **External**, add the
+   scope `https://www.googleapis.com/auth/drive`, and **publish** the app so its status is **In
+   production**. In "Testing", refresh tokens stop working after 7 days. The app doesn't need
+   Google's verification; the sign-in page warns that it is unverified, and you continue anyway.
+3. Create an OAuth client of type **Desktop app** and note its client ID and secret. "Desktop" is
+   only about the one-time sign-in in the next step, which runs on your computer; after that the
+   server saves the files itself.
+4. Download the client's JSON file. On a computer with a browser, run the script below, open the
+   link it prints, sign in as the account that can edit the folder and allow access. It checks that
+   the account can add files to the folder and writes the server's four settings to the env file
+   (without `--save-to` it prints them). The folder ID is the last part of the folder's URL.
+
+   ```sh
+   DRIVE_FOLDER_ID=... node scripts/drive-auth.mjs client_secret_....json --save-to .env.library
+   ```
+
+5. Start the server with `DRIVE_FOLDER_ID`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` and
+   `GOOGLE_REFRESH_TOKEN`, e.g. `node --env-file=.env.library server.mjs` (Node 20.6+). It serves
+   the app right away and loads the library in the background, retrying if Drive can't be reached;
+   `/api/` answers 503 until then.
+
 ### Moving to a new address
 
 Browsers keep saved data per address (scheme, host and port). If the app moves, for example from
@@ -81,8 +141,9 @@ address. Have everyone use **Export all** at the old address and **Import** at t
 | --- | --- |
 | `GURPS/` | Unmodified copy of the `GURPS` folder from [Roll20/roll20-character-sheets](https://github.com/Roll20/roll20-character-sheets). Two files are added: `LICENSE` (Roll20's MIT license) and `UPSTREAM.json` (the upstream commit and sheet version it was copied from). Served at `/sheet/`. |
 | `public/` | The app: `index.html`, `app.css` and the JavaScript in `public/js/`. |
-| `server.mjs` | Dependency-free static server with gzip and a strict Content Security Policy. |
-| `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
+| `server.mjs` | Dependency-free server: static files with gzip and a strict Content Security Policy, plus the library API when one is configured. |
+| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). |
+| `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `drive-auth.mjs` gets the Google Drive refresh token. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
 | `Makefile` | Shortcuts for the common commands. `make` lists them. |
 | `tests/` | End-to-end tests that drive the app in headless Chrome. |
 | `Dockerfile`, `compose.yaml` | The container image, and a Compose file that builds and runs it. |
@@ -112,11 +173,13 @@ npm install      # dev dependency: puppeteer-core
 npm test
 ```
 
-`TEST_URL=http://localhost:8080/ npm test` runs them against a server that is already running instead.
+`TEST_URL=http://localhost:8080/ npm test` runs them against a server that is already running instead
+(the library API tests need a server of their own with a library, so they are skipped then).
 `make test-docker` builds the image, starts it locked down like `compose.yaml` and runs the tests
 against it. CI does the same for every pull request.
 
-They cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
+Unit tests cover the shared library (on a directory, and against a fake Drive API) and its HTTP API.
+The browser tests cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the
 sheet's built-in GCS importer, and the Roll20 commands of the roll buttons. Every test also fails on any console error or
 warning, including ones from the sheet worker.
@@ -135,6 +198,7 @@ functions, so the sheet's code runs as-is.
 | `public/js/autocalc.js` | Evaluates Roll20 auto-calc formulas such as `round(2 * @{basic_lift})` without `eval`. |
 | `public/js/roll20.js`, `public/js/roll-ui.js` | Turn a roll button's macro into Roll20 chat commands: fill in `@{attributes}`, ask its `?{prompts}`, work out the target number, and list the commands to copy. |
 | `public/js/app.js`, `public/js/store.js` | Character list, saving, import/export and language. |
+| `public/js/characters.js` | The export format and the clean-up of characters from files or the network, shared with the server. |
 | `public/app.css` | App chrome, plus the base styles Roll20 gives every sheet (zero specificity, so the sheet's CSS wins). |
 
 ## License

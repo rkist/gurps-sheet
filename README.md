@@ -16,6 +16,8 @@ unmodified, without the rest of Roll20.
   modifiers filled in, and copy it to paste into your Roll20 game: Broadsword-11 at -2 becomes
   `/roll {3d6[Broadsword],0d0+99}<9`. The `0d0+99` makes Roll20 compare the total, so it shows
   "1 success" on 9 or less.
+- **Books**: each player can add the GURPS PDFs they own, which stay in their browser and are never
+  uploaded. A Ref on the sheet, like `B243` or `M23, PU2:126`, then opens its page in a new tab.
 
 Known limitations and planned work are in [TODO.md](TODO.md).
 
@@ -170,6 +172,25 @@ Browsers keep saved data per address (scheme, host and port). If the app moves, 
 `http://localhost:8080` to `https://gurps.example.com`, players see an empty character list at the new
 address. Have everyone use **Export all** at the old address and **Import** at the new one.
 
+## Books
+
+**Books** in the top bar takes the GURPS PDFs you own. For each one, set:
+
+- its **book code**, the letters a Ref starts with: `B` for the Basic Set, `M` for Magic, `MA` for
+  Martial Arts, `PU2` for Power-Ups 2... Known titles are filled in from the file name.
+- a **printed page** and the **PDF page** it is on, since covers and front matter shift the
+  numbering. **Open** shows that page, to check.
+- a **first and last page** only for a book that comes in several PDFs, like the Basic Set's
+  Characters (1–336) and Campaigns (337–575).
+
+Hovering or clicking a Ref field then shows a button per reference (the down arrow reaches them from
+the keyboard), which opens the PDF at that page in Chrome's PDF viewer (one tab per book). The PDFs are kept in the browser's IndexedDB, apart from the
+characters, and never reach the server or the group library.
+
+Refs follow the English books' page numbers, as GCS writes them. Translations may differ: the
+Portuguese Basic Set keeps the chapters on the same pages but sorts advantages, skills and spells by
+their Portuguese names, so those land on the wrong page.
+
 ## Repository layout
 
 | Path | What it is |
@@ -220,7 +241,7 @@ and the same roll commands). Browser tests run the app with a library as two pla
 conflicts, uploading, deleting).
 The browser tests cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the
-sheet's built-in GCS importer, and the Roll20 commands of the roll buttons. Every test also fails on any console error or
+sheet's built-in GCS importer, the Roll20 commands of the roll buttons, and opening a Ref's page in a PDF. Every test also fails on any console error or
 warning, including ones from the sheet worker.
 
 ## How it works
@@ -237,6 +258,7 @@ functions, so the sheet's code runs as-is.
 | `public/js/autocalc.js`, `public/js/attributes.js` | Evaluate Roll20 auto-calc formulas such as `round(2 * @{basic_lift})` without `eval`, and read attributes the way the sheet shows them (stored value, else the field default; `@{field}` in a row means that row's field). Shared with the server. |
 | `public/js/roll20.js`, `public/js/roll-ui.js` | Turn a roll button's macro into Roll20 chat commands: fill in `@{attributes}`, ask its `?{prompts}`, work out the target number, and list the commands to copy. |
 | `public/js/app.js`, `public/js/store.js`, `public/js/library.js` | Character list, saving, import/export, language, and syncing with the shared library. |
+| `public/js/books.js`, `public/js/page-refs.js` | The player's PDFs (the Books dialog), reading page references like `M23, B243`, and opening them at the right page. |
 | `public/js/characters.js` | The export format and the clean-up of characters from files or the network, shared with the server. |
 | `public/app.css` | App chrome, plus the base styles Roll20 gives every sheet (zero specificity, so the sheet's CSS wins). |
 

@@ -1,5 +1,6 @@
 // App shell: character list, open/save, import/export, language, and syncing
 // with the server's shared character library when it has one.
+import { Books } from './books.js';
 import { loadSheet, LANGUAGES, LANGUAGE_TAGS } from './sheet-loader.js';
 import { SheetView } from './sheet-view.js';
 import { contentKey, displayName, FORMAT, newCharacterId, sanitizeCharacter, slug } from './characters.js';
@@ -52,6 +53,7 @@ const SYNC_TEXT = {
 };
 
 const rollPanel = new RollPanel($('roll-panel'));
+const books = new Books({ host: $('sheet-host'), dialog: $('books-dialog'), links: $('ref-links'), notify: toast });
 
 // Navigation, language switches etc. run one at a time.
 function enqueue(task) {
@@ -834,6 +836,7 @@ function wireUp() {
   $('export-character').addEventListener('click', () => enqueue(exportCurrent));
   $('delete-character').addEventListener('click', () => enqueue(deleteCurrent));
   $('upload-local').addEventListener('click', () => enqueue(uploadLocal));
+  $('open-books').addEventListener('click', () => books.showDialog());
   $('empty-state').addEventListener('click', (e) => {
     const action = e.target.closest('[data-action]')?.dataset.action;
     if (action === 'new') enqueue(createCharacter);
@@ -863,6 +866,10 @@ function wireUp() {
 }
 
 wireUp();
+books.load().catch((err) => {
+  console.error(err);
+  toast(`Can't load your books: ${err.message || err}`, true);
+});
 enqueue(async () => {
   await Promise.all([loadSheetFor(readLanguage()), checkLibrary()]);
   await route();

@@ -15,7 +15,7 @@ and the server and app have zero runtime dependencies (Node 18+).
 npm start                      # http://localhost:8080 (PORT, HOST env vars)
 STORAGE_DIR=./library npm start  # with a shared character library in a local directory
 npm install && npm test        # all tests; puppeteer-core drives a local Chrome (CHROME_PATH if not found)
-node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs tests/mcp.test.mjs tests/sheet-html.test.mjs tests/runtime.test.mjs  # no Chrome needed
+node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs tests/mcp.test.mjs tests/sheet-html.test.mjs tests/runtime.test.mjs tests/page-refs.test.mjs  # no Chrome needed
 node --test --test-name-pattern="skill levels" tests/sheet.test.mjs      # one browser test
 TEST_URL=http://localhost:8080/ npm test                                 # against an already-running server
 make test-docker               # build the image, run it locked down, run the tests against it (what CI runs)
@@ -114,6 +114,15 @@ computed fields refused); `lib/rolls.mjs` maps roll names to the sheet's buttons
 reproduces the app's pipeline: action buttons are clicked in the runtime to get the sheet's macro.
 Browser tests in `tests/sheet.test.mjs` check that Node and the browser give identical attributes for
 the sample character and the GCS import, and the same damage command.
+
+**Books** (`books.js`, `page-refs.js`). Players add PDFs they own; they live in a separate IndexedDB
+database, `gurps-books` (settings in `books`, the Blob in `files`), and never go to the server. A book
+has a code (`B`), an optional printed page range, and an offset from printed to PDF page.
+`page-refs.js` (no DOM, `tests/page-refs.test.mjs`) parses refs like `M23, B243` or `PU2:126` and picks
+the PDF. Hovering or focusing a Ref field (`attr_ref`, `attr_race_ref`) shows a popover outside the
+sheet with a button per ref, which opens `blob:...#page=N` in a tab named per book. Chrome's PDF viewer
+ignores a change of `#page` alone, so each open makes a new blob URL. In tests, close the PDF tab
+before closing the browser context, or the close never finishes.
 
 **Attribute names.** Stored lowercase. Repeating fields are `repeating_<section>_<rowId>_<field>`;
 section names never contain `_`, and row ids start with `-` and contain no `_` (the sheet splits on

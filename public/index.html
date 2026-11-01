@@ -31,10 +31,13 @@
       <button type="button" class="app-btn app-btn-danger" id="delete-character">Delete</button>
     </div>
 
-    <label class="app-lang">
-      <span class="app-visually-hidden">Language</span>
-      <select id="language"></select>
-    </label>
+    <div class="app-bar-end">
+      <button type="button" class="app-btn app-btn-quiet" id="open-books">Books</button>
+      <label class="app-lang">
+        <span class="app-visually-hidden">Language</span>
+        <select id="language"></select>
+      </label>
+    </div>
   </header>
 
   <main>
@@ -101,6 +104,21 @@
     </form>
   </dialog>
 
+  <dialog id="books-dialog" class="app-dialog app-dialog-books">
+    <form method="dialog">
+      <h2 class="app-dialog-title">Books</h2>
+      <p class="app-dialog-text">Your own GURPS PDFs, kept in this browser only. A Ref on the sheet, like B243 or M23, then opens its page: give each PDF its book code, and a printed page number with the PDF page it is on (<strong>Open</strong> shows that page to check). First and last page are for a book in several PDFs, like the Basic Set’s Characters (1–336) and Campaigns (337–575).</p>
+      <ul class="app-books"></ul>
+      <p class="app-books-empty">No books yet.</p>
+      <div class="app-dialog-actions">
+        <button type="button" class="app-btn" data-action="add">Add PDFs…</button>
+        <button type="submit" class="app-btn app-btn-primary">Done</button>
+      </div>
+    </form>
+    <input type="file" accept=".pdf,application/pdf" multiple hidden>
+  </dialog>
+
+  <div id="ref-links" class="app-ref-links" role="group" aria-label="Open in your books" hidden></div>
   <div id="toast" class="app-toast" role="status" hidden></div>
   <input type="file" id="import-file" accept=".json,application/json" hidden>
 </body>

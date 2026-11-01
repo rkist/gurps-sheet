@@ -60,10 +60,12 @@ describe('MCP server', { skip }, () => {
 
   test('lists its tools', async () => {
     const { tools } = (await rpc('tools/list')).result;
-    assert.deepEqual(tools.map((t) => t.name), ['list_characters', 'get_character', 'get_character_history', 'get_character_version', 'sheet_fields']);
+    const writers = ['create_character', 'edit_character', 'import_character'];
+    assert.deepEqual(tools.map((t) => t.name), ['list_characters', 'get_character', 'get_character_history', 'get_character_version', 'sheet_fields', 'roll_command', ...writers]);
     for (const tool of tools) {
       assert.equal(tool.inputSchema.type, 'object');
-      assert.equal(tool.annotations.readOnlyHint, true);
+      assert.equal(tool.annotations.readOnlyHint, !writers.includes(tool.name));
+      assert.equal(tool.annotations.destructiveHint, false, 'edits add versions; nothing is lost');
     }
   });
 
@@ -127,6 +129,68 @@ describe('MCP server', { skip }, () => {
     assert.match(skills, /^- level \(.*set by the sheet\)$/m);
     const found = textOf(await callTool('sheet_fields', { search: 'point_summary' }));
     assert.match(found, /^- character: point_summary \(text; computed: @\{attribute_positive_total\} \+ /);
+  });
+
+  test('gives Roll20 commands', async () => {
+    const staff = textOf(await callTool('roll_command', { character: 'mage', roll: 'Staff', modifier: -2 }));
+    assert.equal(staff, 'Staff (skill)\n/roll {3d6[Staff],0d0+99}<9   (succeeds on 9 or less)\nPrompt "Modifier": -2');
+    const fireball = textOf(await callTool('roll_command', { character: 'mage', roll: 'Fireball', damage: true, answers: { '# of Die': '2d6+2' } }));
+    assert.match(fireball, /^\/roll \{ 2d6\[Fireball\]\+2, \{1\} \}kh1$/m);
+    assert.match(fireball, /^Prompt "# of Die": 2d6\+2 \(choices: 1d6\+1, 2d6\+2, /m);
+    assert.match(textOf(await callTool('roll_command', { character: 'mage', roll: 'Quarterstaff (Staff Swing)' })), /is also a defense: pass kind/);
+    const unknown = await callTool('roll_command', { character: 'mage', roll: 'Juggling' });
+    assert.equal(unknown.isError, true);
+    assert.match(textOf(unknown), /No roll called "Juggling"/);
+  });
+
+  test('creates, edits and imports characters with the sheet', async () => {
+    const created = textOf(
+      await callTool('create_character', {
+        name: 'Sir Testalot',
+        changes: [
+          { action: 'set', values: { strength_points: 20 } },
+          { action: 'add_row', section: 'skills', values: { name: 'Broadsword', base: 'DX', difficulty: 'A', points: 4 } },
+        ],
+      }),
+    );
+    const id = /^Created "Sir Testalot" \((c-[a-z0-9-]+)\), version /.exec(created)?.[1];
+    assert.ok(id, created);
+    assert.ok(created.includes('ST 12 · DX 10'));
+    assert.ok(created.includes('- Broadsword (DX/A) 11 [4]'));
+
+    const edited = textOf(
+      await callTool('edit_character', {
+        character: id,
+        changes: [{ action: 'update_row', section: 'skills', row: 'broadsword', values: { points: 8 } }],
+      }),
+    );
+    assert.match(edited, /^Saved "Sir Testalot" as version .*\nChanges:\n- changed repeating_skills row -\S+ \(Broadsword\): points = "8"/);
+    assert.ok(edited.includes('- Broadsword (DX/A) 12 [8]'));
+    assert.match(textOf(await callTool('get_character_history', { character: id })), /^2 versions/);
+    const stored = (await (await fetch(new URL(`api/characters/${id}`, server.url))).json()).character;
+    assert.equal(stored.name, 'Sir Testalot');
+
+    const rampage = await readFile(path.join(projectRoot, 'GURPS/readme/assets/Rampage (NPC) export.json'), 'utf8');
+    const imported = textOf(await callTool('import_character', { content: rampage }));
+    assert.match(imported, /^Imported "Rampage" \(c-[a-z0-9-]+\), version /);
+    assert.ok(imported.includes('ST 17 · DX 12 · IQ 10 · HT 12'));
+    assert.ok(textOf(await callTool('list_characters')).includes('- Rampage ('));
+  });
+
+  test('refuses edits the sheet wouldn’t take', async () => {
+    const error = async (name, args) => {
+      const result = await callTool(name, args);
+      assert.equal(result.isError, true, JSON.stringify(result));
+      return textOf(result);
+    };
+    const before = textOf(await callTool('get_character_history', { character: 'mage' }));
+    assert.match(await error('edit_character', { character: 'mage', changes: [{ action: 'set', values: { dodge: 12 } }] }), /"dodge" is computed by the sheet/);
+    assert.match(await error('edit_character', { character: 'mage', changes: [] }), /"changes" is empty/);
+    assert.match(await error('edit_character', { character: 'mage', changes: 'more ST' }), /"changes" must be a list/);
+    assert.equal(textOf(await callTool('get_character_history', { character: 'mage' })), before, 'nothing saved');
+    assert.match(await error('import_character', { content: 'not json' }), /isn’t JSON/);
+    assert.match(await error('import_character', { content: '{"hello": "world"}' }), /The sheet’s importer said: /);
+    assert.match(await error('roll_command', { character: 'mage', roll: 'Staff', modifier: '-2' }), /"modifier" must be a whole number/);
   });
 
   test('reports mistakes as tool errors', async () => {

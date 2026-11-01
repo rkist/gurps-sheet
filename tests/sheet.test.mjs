@@ -4,7 +4,10 @@ import { mkdtemp, readdir, rm } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
+import { applyChanges } from '../lib/character-edit.mjs';
+import { findRoll, rollCommands } from '../lib/rolls.mjs';
 import { loadSheetInfo } from '../lib/sheet-html.mjs';
+import { withSheet } from '../lib/sheet-runtime.mjs';
 import {
   addRow,
   chromePath,
@@ -27,6 +30,22 @@ import {
 
 const TIMEOUT = 120_000;
 const skip = chromePath ? false : 'Chrome or Chromium not found; set CHROME_PATH';
+
+// A character's attributes with row ids replaced by the row's position, to
+// compare characters built in different places.
+function byPosition({ attrs, sections }) {
+  const out = {};
+  for (const [key, value] of Object.entries(attrs)) {
+    let name = key;
+    for (const [section, ids] of Object.entries(sections)) ids.forEach((id, i) => (name = name.replace(`${section}_${id}_`, `${section}_#${i}_`)));
+    out[name] = value;
+  }
+  return out;
+}
+
+const savedCharacter = (page) =>
+  page.evaluate(async (id) => (await import(new URL('js/store.js', location.href).href)).getCharacter(id), new URL(page.url()).hash.slice(4));
+const newCharacterInNode = (sheet) => ({ id: 'c-node', attrs: { ...sheet.newCharacterAttrs, character_name: 'New character' }, sections: {} });
 
 describe('GURPS sheet', { skip }, () => {
   let server;
@@ -79,6 +98,23 @@ describe('GURPS sheet', { skip }, () => {
     assert.ok((await page.$eval('#sheet-host', (el) => el.scrollHeight)) < 3000, 'General tab has a normal height');
     await showTab(page, '7');
     assert.equal(await visible('#sheet-host div.sheet-tab7'), true, 'Updates tab shown when selected');
+    await close();
+  });
+
+  test('builds the same character in Node as in the browser', { timeout: TIMEOUT }, async () => {
+    const page = await open();
+    await createSampleCharacter(page);
+    const inBrowser = await savedCharacter(page);
+    const sheet = loadSheetInfo();
+    const inNode = await withSheet(newCharacterInNode(sheet), sheet, async (runtime) => {
+      await applyChanges(runtime, sheet, [
+        { action: 'set', values: { character_name: 'Sir Testalot', strength_points: 20, tab: 3 } },
+        { action: 'add_row', section: 'skills', values: { name: 'Broadsword', base: 'DX', difficulty: 'A', points: 4 } },
+        { action: 'add_row', section: 'skills', values: { name: 'Stealth', base: 'DX', difficulty: 'A', points: 1 } },
+      ]);
+      return runtime.snapshot();
+    });
+    assert.deepEqual(byPosition(inNode), byPosition(inBrowser));
     await close();
   });
 
@@ -205,6 +241,24 @@ describe('GURPS sheet', { skip }, () => {
     assert.equal((await rowIds(page, 'spells')).length, 31);
     assert.equal((await rowIds(page, 'melee')).length, 10);
     assert.equal((await rowIds(page, 'ranged')).length, 5);
+
+    // The same import in Node, and a weapon's damage roll, whose macro the sheet's code puts together.
+    const inBrowser = await savedCharacter(page);
+    const sheet = loadSheetInfo();
+    const weapon = 'Quarterstaff (Staff Swing)';
+    const inNode = await withSheet(newCharacterInNode(sheet), sheet, async (runtime) => {
+      await runtime.change('character_json_data', json);
+      await runtime.click(sheet.buttons.find((b) => b.name === 'act_import_json'));
+      const character = { id: 'c-node', ...runtime.snapshot() };
+      const damage = await rollCommands(runtime, sheet, findRoll(character, sheet, { roll: weapon, damage: true }));
+      return { ...character, damage: damage.commands.map((c) => c.text) };
+    });
+    assert.deepEqual(byPosition(inNode), byPosition(inBrowser));
+
+    const row = (await rowIds(page, 'melee'))[(await rowNames(page, 'melee')).indexOf(weapon)];
+    await page.$eval(`#sheet-host .repitem[data-reprowid="${row}"] button[name="act_rolldamage"]`, (button) => button.click());
+    await page.waitForSelector('#roll-panel:not([hidden])');
+    assert.deepEqual(await page.$$eval('#roll-panel .app-roll code', (codes) => codes.map((c) => c.textContent)), inNode.damage);
     await close();
   });
 

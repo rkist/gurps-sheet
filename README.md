@@ -141,7 +141,8 @@ token. (A service account can't create files in a personal Drive folder.) One-ti
 ## Claude (MCP)
 
 With a library, the server is also a remote [MCP](https://modelcontextprotocol.io) server at `/mcp`, so
-anyone in the group can ask their Claude about the characters. It reads the same library as the app:
+anyone in the group can ask their Claude about the characters, have it build or change them, and get
+the Roll20 commands for their rolls. It uses the same library as the app:
 
 | Tool | |
 | --- | --- |
@@ -149,6 +150,14 @@ anyone in the group can ask their Claude about the characters. It reads the same
 | `get_character` | A summary with the levels the sheet computes: points, attributes, traits, skills, techniques, spells, attacks, defenses, equipment. `detail: "attributes"` gives the raw sheet attributes. |
 | `get_character_history`, `get_character_version` | Every saved version, and any one of them |
 | `sheet_fields` | The sheet's fields: names, types, choices and defaults |
+| `roll_command` | The Roll20 chat command for a skill, spell, attack, damage, defense, attribute or check, exactly as the app's roll buttons give it |
+| `create_character`, `edit_character` | Create a character, or change one (set attribute points, add, change or remove skills, traits, spells, equipment...) |
+| `import_character` | Create a character from a GCS or GCA export, with the sheet's own importer |
+
+Edits and imports run the sheet itself in Node, as if a player typed them in: Claude sets what a player
+sets, and the sheet computes levels, point totals and derived values. Each one is saved as a new version,
+so the history keeps what was there before. One sheet runs at a time, for up to two minutes; with four
+requests waiting, or 60 run in the last minute, others are turned away until it has caught up.
 
 Add it in Claude Code with `claude mcp add --transport http gurps https://gurps.example.com/mcp`, or
 in claude.ai under Settings → Connectors → Add custom connector. Like the app, it has no login. It
@@ -168,7 +177,7 @@ address. Have everyone use **Export all** at the old address and **Import** at t
 | `GURPS/` | Unmodified copy of the `GURPS` folder from [Roll20/roll20-character-sheets](https://github.com/Roll20/roll20-character-sheets). Two files are added: `LICENSE` (Roll20's MIT license) and `UPSTREAM.json` (the upstream commit and sheet version it was copied from). Served at `/sheet/`. |
 | `public/` | The app: `index.html`, `app.css` and the JavaScript in `public/js/`. |
 | `server.mjs` | Dependency-free server: static files with gzip and a strict Content Security Policy, plus the library API and the MCP server when a library is configured. |
-| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). The MCP server: `mcp.mjs` (protocol), `mcp-tools.mjs` (tools), `character-summary.mjs`, and `sheet-html.mjs`, which reads the sheet's fields and defaults from `GURPS/` without a browser. |
+| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). The MCP server: `mcp.mjs` (protocol), `mcp-tools.mjs` (tools), `character-summary.mjs`, `character-edit.mjs`, `rolls.mjs`, `sheet-html.mjs` (reads the sheet's fields, buttons and defaults from `GURPS/` without a browser), and `sheet-runtime.mjs` / `sheet-thread.mjs`, which run the sheet in Node. |
 | `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `drive-auth.mjs` gets the Google Drive refresh token. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
 | `Makefile` | Shortcuts for the common commands. `make` lists them. |
 | `tests/` | End-to-end tests that drive the app in headless Chrome, and unit tests of the server parts. `fixtures/` has a character made with the sheet's GCS importer. |
@@ -205,8 +214,9 @@ npm test
 against it. CI does the same for every pull request.
 
 Unit tests cover the shared library (on a directory, and against a fake Drive API), its HTTP API, the
-MCP server, and the server's reading of the sheet markup (a browser test checks that it finds the same
-field defaults as the app). Browser tests run the app with a library as two players (sharing,
+MCP server, the server's reading of the sheet markup, and the sheet running in Node (browser tests check
+that both match the app: the same field defaults, the same character from the same edits or GCS import,
+and the same roll commands). Browser tests run the app with a library as two players (sharing,
 conflicts, uploading, deleting).
 The browser tests cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the

@@ -206,6 +206,26 @@ Refs follow the English books' page numbers, as GCS writes them. Translations ma
 Portuguese Basic Set keeps the chapters on the same pages but sorts advantages, skills and spells by
 their Portuguese names, so those land on the wrong page.
 
+### Rules text
+
+`scripts/book-to-markdown.mjs` turns a GURPS PDF with a text layer into Markdown, so Claude can look
+rules up: one file per PDF, every printed page starting with a marker in the sheet's Ref format
+(`<a id="M23"></a>**[M23]**`), headings from the font sizes, paragraphs put back together across
+lines and columns, and page references like "p. 14" or "p. B184" turned into links to those markers.
+It reads the PDF with macOS's PDFKit (`scripts/pdf-lines.swift`), so it runs on a Mac with nothing to
+install:
+
+```sh
+node scripts/book-to-markdown.mjs "GURPS Magic.pdf" --code M --title "GURPS Magic" --out ~/rules
+```
+
+The printed page numbers are found in the footers; `--offset` (PDF page index from 0, minus the
+printed page) sets them by hand. A scan without a text layer is refused: it needs OCR first. Tables come out one row
+per line, and a box in the middle of a page may cut the paragraph around it in two.
+
+The Markdown is the book's text: keep it private. Never add it to this repository or the image, both
+of which are public (`rules/` is in `.gitignore` in case it lands here).
+
 ## Repository layout
 
 | Path | What it is |
@@ -214,7 +234,7 @@ their Portuguese names, so those land on the wrong page.
 | `public/` | The app: `index.html`, `app.css` and the JavaScript in `public/js/`. |
 | `server.mjs` | Dependency-free server: static files with gzip and a strict Content Security Policy, plus the library API and the MCP server when a library is configured. |
 | `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). The MCP server: `mcp.mjs` (protocol), `mcp-tools.mjs` (tools), `character-summary.mjs`, `character-edit.mjs`, `rolls.mjs`, `sheet-html.mjs` (reads the sheet's fields, buttons and defaults from `GURPS/` without a browser), and `sheet-runtime.mjs` / `sheet-thread.mjs`, which run the sheet in Node. |
-| `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `drive-auth.mjs` gets the Google Drive refresh token. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
+| `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `drive-auth.mjs` gets the Google Drive refresh token. `book-to-markdown.mjs` and `pdf-lines.swift` turn a PDF into rules Markdown. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
 | `Makefile` | Shortcuts for the common commands. `make` lists them. |
 | `tests/` | End-to-end tests that drive the app in headless Chrome, and unit tests of the server parts. `fixtures/` has a character made with the sheet's GCS importer. |
 | `Dockerfile`, `compose.yaml` | The container image, and a Compose file that builds and runs it. |
@@ -249,7 +269,7 @@ npm test
 `make test-docker` builds the image, starts it locked down like `compose.yaml` and runs the tests
 against it. CI does the same for every pull request.
 
-Unit tests cover the shared library (on a directory, and against a fake Drive API), its HTTP API, the
+Unit tests cover the PDF-to-Markdown converter (on made-up pages), the shared library (on a directory, and against a fake Drive API), its HTTP API, the
 MCP server, the server's reading of the sheet markup, and the sheet running in Node (browser tests check
 that both match the app: the same field defaults, the same character from the same edits or GCS import,
 and the same roll commands). Browser tests run the app with a library as two players (sharing,

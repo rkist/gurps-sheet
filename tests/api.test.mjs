@@ -1,11 +1,8 @@
 // Tests for the shared library's HTTP API, on a server with a directory library.
 import assert from 'node:assert/strict';
-import { mkdtemp, rm } from 'node:fs/promises';
 import http from 'node:http';
-import os from 'node:os';
-import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
-import { sleep, startServer } from './helpers.mjs';
+import { startLibraryServer, startServer } from './helpers.mjs';
 
 const skip = process.env.TEST_URL ? 'needs its own server with a library' : false;
 
@@ -18,33 +15,18 @@ async function call(base, method, route, body) {
   return { status: res.status, headers: res.headers, body: await res.json() };
 }
 
-async function startWithLibrary() {
-  const dir = await mkdtemp(path.join(os.tmpdir(), 'gurps-api-'));
-  const server = await startServer({ env: { STORAGE_DIR: dir } });
-  for (let i = 0; (await fetch(new URL('api/characters', server.url))).status === 503; i++) {
-    if (i > 50) throw new Error('The library never loaded');
-    await sleep(100);
-  }
-  return {
-    url: server.url,
-    stop: async () => {
-      server.stop();
-      await rm(dir, { recursive: true, force: true });
-    },
-  };
-}
-
 const sir = (strength) => ({ attrs: { character_name: 'Sir Testalot', strength_points: strength }, sections: {} });
 
 describe('library API', { skip }, () => {
   let server;
   before(async () => {
-    server = await startWithLibrary();
+    server = await startLibraryServer();
   });
   after(() => server?.stop());
 
   test('saves versions, serves the newest and keeps the history', async () => {
-    assert.deepEqual((await call(server.url, 'GET', 'api/characters')).body, { characters: [] });
+    assert.deepEqual((await call(server.url, 'GET', 'api/library')).body, { enabled: true, ready: true });
+    assert.deepEqual((await call(server.url, 'GET', 'api/characters')).body, { characters: [], deleted: [] });
 
     const first = await call(server.url, 'POST', 'api/characters/c-sir', { character: sir(20) });
     assert.equal(first.status, 201);
@@ -82,7 +64,9 @@ describe('library API', { skip }, () => {
     const current = await call(server.url, 'GET', 'api/characters/c-gone');
     assert.equal(current.status, 404);
     assert.equal(current.body.deleted, true);
-    assert.ok(!(await call(server.url, 'GET', 'api/characters')).body.characters.some((c) => c.id === 'c-gone'));
+    const list = (await call(server.url, 'GET', 'api/characters')).body;
+    assert.ok(!list.characters.some((c) => c.id === 'c-gone'));
+    assert.ok(list.deleted.includes('c-gone'), 'listed as deleted, so browsers can drop their copies');
     assert.equal((await call(server.url, 'GET', 'api/characters/c-gone/versions')).body.versions.length, 2);
   });
 
@@ -93,6 +77,7 @@ describe('library API', { skip }, () => {
     assert.equal((await call(server.url, 'GET', 'api/other')).status, 404);
     assert.equal((await call(server.url, 'DELETE', 'api/characters/c-nobody', {})).status, 404);
     assert.equal((await call(server.url, 'PUT', 'api/characters/c-sir', {})).status, 405);
+    assert.equal((await call(server.url, 'POST', 'api/library', {})).status, 405);
     assert.equal((await call(server.url, 'POST', 'api/characters', {})).status, 405);
     assert.equal((await call(server.url, 'POST', 'api/characters/c-bad', '{not json')).status, 400);
     assert.equal((await call(server.url, 'POST', 'api/characters/c-bad', { character: { name: 'no attrs' } })).status, 400);
@@ -145,7 +130,7 @@ describe('library API', { skip }, () => {
 
 describe('library API limits', { skip }, () => {
   test('limits saves per minute', async () => {
-    const server = await startWithLibrary();
+    const server = await startLibraryServer();
     try {
       const statuses = [];
       for (let i = 0; i < 61; i++) statuses.push((await call(server.url, 'POST', `api/characters/c-spam-${i}`, { character: sir(i) })).status);
@@ -162,6 +147,9 @@ describe('library API limits', { skip }, () => {
       const res = await call(server.url, 'GET', 'api/characters');
       assert.equal(res.status, 404);
       assert.match(res.body.error, /no shared character library/);
+      const status = await call(server.url, 'GET', 'api/library');
+      assert.equal(status.status, 200);
+      assert.deepEqual(status.body, { enabled: false, ready: false });
     } finally {
       server.stop();
     }

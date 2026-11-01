@@ -4,9 +4,9 @@ A self-hosted GURPS 4th Edition character builder for a gaming group. It runs th
 [Roll20 GURPS character sheet](https://github.com/Roll20/roll20-character-sheets/tree/master/GURPS)
 unmodified, without the rest of Roll20.
 
-- Characters are saved in each player's browser (IndexedDB). Optionally the server also keeps a
-  [shared character library](#shared-character-library) in a Google Drive folder, where every save
-  is a new file, so the history is kept.
+- Characters are saved in each player's browser (IndexedDB). Optionally the server keeps a
+  [shared character library](#shared-character-library) in a Google Drive folder, so the whole group
+  sees the same characters, and every save is kept as a version.
 - **Export** / **Import** move characters between browsers or devices as JSON. **Export all** makes a backup.
 - All of the sheet's own logic runs: derived stats, skill and spell levels, point totals, and the
   built-in GCA/GCS importers (gear tab → Import).
@@ -79,8 +79,15 @@ With a library configured, the server keeps the group's characters in one place 
 time, such as `sir-testalot--2026-10-31T21-04-05-123Z.json`. The newest file of a character is its
 current version and the older files are its history. Deleting adds a `...--deleted.json` file. Each
 file is a normal export, so any version can be downloaded and imported by hand, and exports dropped
-into the folder (one character per file) show up too. (The app doesn't use the library yet; see
-[TODO.md](TODO.md).)
+into the folder (one character per file) show up too.
+
+The app then lists the library's characters, and new and imported characters go to it. Each browser
+still saves a copy of the characters it opens, and sends changes to the library once editing pauses
+for 20 seconds, at least every minute while it goes on, and when you leave the sheet or switch tabs.
+The bar shows whether the open character is in the library. If someone else (another player, or
+Claude) saved it in the meantime, the app asks whether to keep your version or load theirs; either
+way, the other one stays in the history. Characters saved in a browser before the server had a
+library show as "only in this browser", with a button to upload them.
 
 There is no login: anyone who can reach the server can read and change every character in the
 library. Because nothing is overwritten, every change can be undone from the history. Requests are
@@ -89,7 +96,8 @@ for conflicting saves in memory.
 
 | API | |
 | --- | --- |
-| `GET /api/characters` | The current version of every character |
+| `GET /api/library` | `{ enabled, ready }`: whether the server has a library. Always 200, so the app can check without an error. |
+| `GET /api/characters` | The current version of every character, and the ids of deleted ones |
 | `GET /api/characters/:id` | `{ version, savedAt, character }` |
 | `GET /api/characters/:id/versions` | The history, newest first; `/versions/:version` gets one |
 | `POST /api/characters/:id` | `{ character, baseVersion }` saves a new version. If `baseVersion` isn't the current version any more, nothing is saved and the answer is 409 with the current one. |
@@ -178,7 +186,8 @@ npm test
 `make test-docker` builds the image, starts it locked down like `compose.yaml` and runs the tests
 against it. CI does the same for every pull request.
 
-Unit tests cover the shared library (on a directory, and against a fake Drive API) and its HTTP API.
+Unit tests cover the shared library (on a directory, and against a fake Drive API) and its HTTP API,
+and browser tests run the app with a library as two players (sharing, conflicts, uploading, deleting).
 The browser tests cover the sheet's own calculations (derived stats, skill levels, point totals), tab switching,
 repeating rows (add, reorder, delete), saving across reloads, export/import, language switching, the
 sheet's built-in GCS importer, and the Roll20 commands of the roll buttons. Every test also fails on any console error or
@@ -197,7 +206,7 @@ functions, so the sheet's code runs as-is.
 | `public/js/sheet-view.js` | Mounts the sheet for one character, binds every `attr_*` field, builds repeating sections (add, modify, delete, drag to reorder), computes auto-calculated fields, and passes edits and button clicks to the worker. |
 | `public/js/autocalc.js` | Evaluates Roll20 auto-calc formulas such as `round(2 * @{basic_lift})` without `eval`. |
 | `public/js/roll20.js`, `public/js/roll-ui.js` | Turn a roll button's macro into Roll20 chat commands: fill in `@{attributes}`, ask its `?{prompts}`, work out the target number, and list the commands to copy. |
-| `public/js/app.js`, `public/js/store.js` | Character list, saving, import/export and language. |
+| `public/js/app.js`, `public/js/store.js`, `public/js/library.js` | Character list, saving, import/export, language, and syncing with the shared library. |
 | `public/js/characters.js` | The export format and the clean-up of characters from files or the network, shared with the server. |
 | `public/app.css` | App chrome, plus the base styles Roll20 gives every sheet (zero specificity, so the sheet's CSS wins). |
 

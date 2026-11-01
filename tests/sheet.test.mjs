@@ -7,6 +7,7 @@ import { after, before, describe, test } from 'node:test';
 import {
   addRow,
   chromePath,
+  closeBrowser,
   clickVisible,
   createSampleCharacter,
   launchBrowser,
@@ -37,7 +38,7 @@ describe('GURPS sheet', { skip }, () => {
   });
 
   after(async () => {
-    await browser?.close();
+    await closeBrowser(browser);
     server?.stop();
   });
 

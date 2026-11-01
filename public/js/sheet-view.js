@@ -18,11 +18,14 @@ function setInputValue(el, value, { attribute = false } = {}) {
 }
 
 export class SheetView {
-  constructor({ host, sheet, character, onChange, onRoll, onError }) {
+  // onChange: any value changed. onEdit: the player changed something or
+  // clicked a sheet button, as opposed to the sheet worker updating values.
+  constructor({ host, sheet, character, onChange, onEdit, onRoll, onError }) {
     this.host = host;
     this.sheet = sheet;
     this.character = character;
     this.onChange = onChange;
+    this.onEdit = onEdit;
     this.onRoll = onRoll;
     this.onError = onError;
 
@@ -89,6 +92,7 @@ export class SheetView {
     this.applyToAll(key, value);
     this.worker.postMessage({ type: 'change', name: key, value });
     this.queueRecompute();
+    this.onEdit?.();
     this.onChange?.();
   }
 
@@ -273,6 +277,7 @@ export class SheetView {
     this.applyToAll(key, value, el);
     this.worker.postMessage({ type: 'change', name: key, value });
     this.queueRecompute();
+    this.onEdit?.();
     this.onChange?.();
   };
 
@@ -298,6 +303,7 @@ export class SheetView {
     const htmlAttributes = {};
     for (const attr of target.attributes) htmlAttributes[attr.name] = attr.value;
     this.worker.postMessage({ type: 'click', name: name.slice(4).toLowerCase(), htmlAttributes, ...row });
+    this.onEdit?.();
   };
 
   // { section, rowId } of the repeating row an element is in, or null.
@@ -313,6 +319,7 @@ export class SheetView {
     this.renderSection(section);
     this.worker.postMessage({ type: 'addRow', section, rowId });
     this.queueRecompute();
+    this.onEdit?.();
     this.onChange?.();
   }
 
@@ -334,6 +341,7 @@ export class SheetView {
     this.renderSection(section);
     this.worker.postMessage({ type: 'removeRow', section, rowId });
     this.queueRecompute();
+    this.onEdit?.();
     this.onChange?.();
   }
 
@@ -376,6 +384,7 @@ export class SheetView {
       this.sections[section] = ids;
       this.renderSection(section);
       this.worker.postMessage({ type: 'reorder', section, ids });
+      this.onEdit?.();
       this.onChange?.();
     };
 

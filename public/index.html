@@ -26,6 +26,7 @@
         <input id="character-name" type="text" autocomplete="off" spellcheck="false" placeholder="Character name">
       </label>
       <span class="app-status" id="save-status" aria-live="polite"></span>
+      <span class="app-sync" id="sync-status" aria-live="polite" hidden></span>
       <button type="button" class="app-btn" id="export-character">Export</button>
       <button type="button" class="app-btn app-btn-danger" id="delete-character">Delete</button>
     </div>
@@ -39,7 +40,13 @@
   <main>
     <section id="home-view" class="app-home" hidden>
       <h1>Characters</h1>
-      <p class="app-note">Characters are saved in this browser only. Use <strong>Export</strong> to back them up or move them to another device.</p>
+      <p class="app-note" id="browser-note">Characters are saved in this browser only. Use <strong>Export</strong> to back them up or move them to another device.</p>
+      <p class="app-note" id="library-note" hidden>Characters are kept in the group library on the server, so everyone sees the same sheets, and every save stays in its history.</p>
+      <p class="app-banner app-banner-warn" id="library-problem" role="status" hidden></p>
+      <div class="app-banner" id="upload-banner" hidden>
+        <span id="upload-banner-text"></span>
+        <button type="button" class="app-btn app-btn-primary" id="upload-local">Upload to the group library</button>
+      </div>
       <ul id="character-list" class="app-list"></ul>
       <div id="empty-state" class="app-empty" hidden>
         <p>No characters yet.</p>
@@ -79,6 +86,17 @@
       <div class="app-dialog-actions">
         <button type="button" class="app-btn" data-action="cancel">Cancel</button>
         <button type="submit" class="app-btn app-btn-primary" value="roll">Get command</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="choice-dialog" class="app-dialog app-dialog-wide">
+    <form method="dialog">
+      <h2 class="app-dialog-title"></h2>
+      <p class="app-dialog-text"></p>
+      <div class="app-dialog-actions">
+        <button type="submit" class="app-btn" value="theirs"></button>
+        <button type="submit" class="app-btn app-btn-primary" value="mine"></button>
       </div>
     </form>
   </dialog>

@@ -25,6 +25,15 @@ export function slug(text) {
   );
 }
 
+// Two characters with the same key have the same attributes and rows, whatever
+// their order or metadata.
+export function contentKey(character) {
+  const clean = sanitizeCharacter(character, { id: 'c-x' });
+  if (!clean) return '';
+  const sorted = (object) => Object.keys(object).sort().map((key) => [key, object[key]]);
+  return JSON.stringify([sorted(clean.attrs), sorted(clean.sections)]);
+}
+
 // Keeps only plain attribute values and valid repeating rows. `id` is the id the
 // character gets: a new one for imports, the existing one for library saves.
 export function sanitizeCharacter(raw, { id = newCharacterId() } = {}) {

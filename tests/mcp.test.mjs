@@ -1,6 +1,7 @@
 // Tests for the MCP server at /mcp, on a server with a directory library.
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { copyFile, mkdtemp, readFile, rm } from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { after, before, describe, test } from 'node:test';
 import { mcpTokensFromEnv } from '../lib/mcp.mjs';
@@ -294,5 +295,82 @@ describe('MCP server without a library', { skip }, () => {
     } finally {
       server.stop();
     }
+  });
+});
+
+describe('MCP server with rulebooks', { skip }, () => {
+  const token = 'rules-token-0123456789';
+  let dir;
+  let servers = [];
+  let id = 0;
+  const rpc = async (server, method, params) =>
+    (await post(server.url, { jsonrpc: '2.0', id: ++id, method, params }, {}, `mcp/${token}`)).body;
+  const tool = async (server, name, args) => (await rpc(server, 'tools/call', { name, arguments: args })).result;
+  const toolNames = async (server) => (await rpc(server, 'tools/list')).result.tools.map((t) => t.name);
+  // The rules load in the background; their tools say so until then.
+  async function ready(server) {
+    for (let i = 0; /still loading/.test((await tool(server, 'read_rules', { ref: 'T1' })).content[0].text); i++) {
+      if (i > 50) throw new Error('The rules never loaded');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
+    return server;
+  }
+  const start = async (starter, env) => {
+    const server = await starter({ env: { RULES_DIR: dir, ...env } });
+    servers.push(server);
+    return server;
+  };
+
+  before(async () => {
+    dir = await mkdtemp(path.join(os.tmpdir(), 'gurps-rules-'));
+    await copyFile(path.join(projectRoot, 'tests/fixtures/gurps-testing.md'), path.join(dir, 'gurps-testing.md'));
+  });
+
+  after(async () => {
+    await Promise.all(servers.map((s) => s.stop()));
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  test('adds rules tools and names the books, behind the token', async () => {
+    const server = await ready(await start(startLibraryServer, { MCP_TOKEN: token }));
+    const names = await toolNames(server);
+    assert.deepEqual(names.slice(-2), ['search_rules', 'read_rules']);
+    assert.ok(names.includes('get_character'));
+    const { instructions } = (await rpc(server, 'initialize', { protocolVersion: '2025-11-25' })).result;
+    assert.match(instructions, /repeating_<section>_<rowId>_<field>/);
+    assert.match(instructions, /The books are: GURPS Testing \(T1-T3\)/);
+
+    const found = await tool(server, 'search_rules', { query: 'flaming teapot' });
+    assert.match(found.content[0].text, /^## T1 · GURPS Testing › Flaming Teapot\n\n\*\*Missile\*\*/);
+    assert.equal((await tool(server, 'read_rules', { ref: 'T2' })).content[0].text.split('\n\n')[0], '# T2 · GURPS Testing');
+    assert.match((await tool(server, 'read_rules', { ref: 'T2', pages: 2 })).content[0].text, /# T3 · GURPS Testing\n\n# BREAKAGE/);
+
+    const missing = await tool(server, 'read_rules', { ref: 'T9' });
+    assert.equal(missing.isError, true);
+    assert.equal(missing.content[0].text, 'There is no page T9. The books are: GURPS Testing (T1-T3).');
+    assert.equal((await tool(server, 'search_rules', { query: 'x', book: 'Q' })).isError, true);
+    assert.equal((await tool(server, 'search_rules', { query: 'x', limit: 0 })).isError, true);
+    assert.equal((await tool(server, 'read_rules', { ref: 'T1', pages: 9 })).isError, true);
+    assert.match((await tool(server, 'search_rules', { query: 'dragon' })).content[0].text, /^Nothing found for "dragon"/);
+  });
+
+  test('leaves the rules out without a token', async () => {
+    const server = await start(startLibraryServer, {});
+    const res = await post(server.url, { jsonrpc: '2.0', id: 1, method: 'tools/list' });
+    assert.ok(!res.body.result.tools.some((t) => t.name.endsWith('_rules')));
+  });
+
+  test('won’t start with the rules in a folder it serves, and starts without rules or a token', async () => {
+    await assert.rejects(startServer({ env: { RULES_DIR: path.join(projectRoot, 'public'), MCP_TOKEN: token } }), /exited with code 1/);
+    const server = await start(startServer, { RULES_DIR: '', RULES_FOLDER_ID: 'some-folder' });
+    assert.equal((await post(server.url, { jsonrpc: '2.0', id: 1, method: 'ping' })).status, 404, 'no library, no rules: no /mcp');
+  });
+
+  test('answers with only the rules when there is no library', async () => {
+    const server = await ready(await start(startServer, { MCP_TOKEN: token }));
+    assert.deepEqual(await toolNames(server), ['search_rules', 'read_rules']);
+    const { instructions } = (await rpc(server, 'initialize', { protocolVersion: '2025-11-25' })).result;
+    assert.doesNotMatch(instructions, /repeating_/);
+    assert.match(instructions, /^This server has the text of the group's GURPS rulebooks/);
   });
 });

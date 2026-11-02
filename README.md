@@ -155,6 +155,7 @@ the Roll20 commands for their rolls. It uses the same library as the app:
 | `roll_command` | The Roll20 chat command for a skill, spell, attack, damage, defense, attribute or check, exactly as the app's roll buttons give it |
 | `create_character`, `edit_character` | Create a character, or change one (set attribute points, add, change or remove skills, traits, spells, equipment...) |
 | `import_character` | Create a character from a GCS or GCA export, with the sheet's own importer |
+| `search_rules`, `read_rules` | With [rulebooks](#rulebooks): search the books' text, and read pages by ref (`B243`, `M23-24`) |
 
 Edits and imports run the sheet itself in Node, as if a player typed them in: Claude sets what a player
 sets, and the sheet computes levels, point totals and derived values. Each one is saved as a new version,
@@ -165,6 +166,24 @@ Add it in Claude Code with `claude mcp add --transport http gurps https://gurps.
 in claude.ai under Settings → Connectors → Add custom connector. It answers only POST requests with
 JSON (no event stream or sessions), and refuses requests from web pages (those carry an `Origin`
 header, which MCP clients like Claude don't send).
+
+### Rulebooks
+
+The MCP server can also hold the text of the group's rulebooks, so Claude answers rules questions from
+the books and gives the pages (`B243`), which the app opens from a sheet's Ref field. Turn each PDF into
+Markdown with the [converter](#rules-text), then put the `.md` files in a folder the server reads:
+
+- `RULES_FOLDER_ID`: a Google Drive folder, read with the library's Google credentials
+  (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `GOOGLE_REFRESH_TOKEN`). Share it with the account the
+  server signs in as.
+- `RULES_DIR`: a directory, e.g. for development. Not inside `public/` or `GURPS/`, which anyone can
+  download: the server refuses to start then.
+
+The server reads the folder again every 10 minutes, so new books show up without a restart. A file whose pages another file already has (the same book twice, or the Basic Set whole and split) is left out, with a message in the log. The text
+is the books' own, so it is only loaded with an [`MCP_TOKEN`](#token): without one the server logs that
+and leaves the rules out. With rules and no character library, `/mcp` has just the two rules tools.
+`search_rules` ranks sections (a heading and the text under it) by the words of the question, the one
+named like the question first; `read_rules` gives up to five pages, or a range like `B243-245`.
 
 ### Token
 
@@ -233,7 +252,7 @@ of which are public (`rules/` is in `.gitignore` in case it lands here).
 | `GURPS/` | Unmodified copy of the `GURPS` folder from [Roll20/roll20-character-sheets](https://github.com/Roll20/roll20-character-sheets). Two files are added: `LICENSE` (Roll20's MIT license) and `UPSTREAM.json` (the upstream commit and sheet version it was copied from). Served at `/sheet/`. |
 | `public/` | The app: `index.html`, `app.css` and the JavaScript in `public/js/`. |
 | `server.mjs` | Dependency-free server: static files with gzip and a strict Content Security Policy, plus the library API and the MCP server when a library is configured. |
-| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). The MCP server: `mcp.mjs` (protocol), `mcp-tools.mjs` (tools), `character-summary.mjs`, `character-edit.mjs`, `rolls.mjs`, `sheet-html.mjs` (reads the sheet's fields, buttons and defaults from `GURPS/` without a browser), and `sheet-runtime.mjs` / `sheet-thread.mjs`, which run the sheet in Node. |
+| `lib/` | The shared character library: `storage.mjs` (versions and history), `drive.mjs` (Google Drive), `api.mjs` (HTTP API). The MCP server: `mcp.mjs` (protocol), `mcp-tools.mjs` (tools), `rules.mjs` (the rulebooks' text and its search), `character-summary.mjs`, `character-edit.mjs`, `rolls.mjs`, `sheet-html.mjs` (reads the sheet's fields, buttons and defaults from `GURPS/` without a browser), and `sheet-runtime.mjs` / `sheet-thread.mjs`, which run the sheet in Node. |
 | `scripts/` | `sync-sheet.mjs` replaces `GURPS/` with a fresh copy from an upstream checkout. `drive-auth.mjs` gets the Google Drive refresh token. `book-to-markdown.mjs` and `pdf-lines.swift` turn a PDF into rules Markdown. `test-docker.sh` and `publish.sh` back `make test-docker` and `make publish`. |
 | `Makefile` | Shortcuts for the common commands. `make` lists them. |
 | `tests/` | End-to-end tests that drive the app in headless Chrome, and unit tests of the server parts. `fixtures/` has a character made with the sheet's GCS importer. |
@@ -269,7 +288,7 @@ npm test
 `make test-docker` builds the image, starts it locked down like `compose.yaml` and runs the tests
 against it. CI does the same for every pull request.
 
-Unit tests cover the PDF-to-Markdown converter (on made-up pages), the shared library (on a directory, and against a fake Drive API), its HTTP API, the
+Unit tests cover the PDF-to-Markdown converter (on made-up pages), the rulebook search (on a made-up book), the shared library (on a directory, and against a fake Drive API), its HTTP API, the
 MCP server, the server's reading of the sheet markup, and the sheet running in Node (browser tests check
 that both match the app: the same field defaults, the same character from the same edits or GCS import,
 and the same roll commands). Browser tests run the app with a library as two players (sharing,

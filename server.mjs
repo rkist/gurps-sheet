@@ -3,15 +3,18 @@
 // STORAGE_DIR or a Google Drive folder configured it also keeps the group's
 // shared character library (lib/storage.mjs) behind /api/ (lib/api.mjs), and
 // an MCP server at /mcp (lib/mcp.mjs) through which Claude reads it; without
-// one, characters live only in each player's browser.
+// one, characters live only in each player's browser. With RULES_DIR or
+// RULES_FOLDER_ID and MCP_TOKEN, the MCP server also searches the group's
+// rulebooks (lib/rules.mjs).
 import http from 'node:http';
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { readFile, stat } from 'node:fs/promises';
 import { gzipSync } from 'node:zlib';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { handleApi } from './lib/api.mjs';
 import { handleMcp, mcpTokensFromEnv } from './lib/mcp.mjs';
+import { rulesFromEnv } from './lib/rules.mjs';
 import { loadSheetInfo } from './lib/sheet-html.mjs';
 import { libraryFromEnv } from './lib/storage.mjs';
 
@@ -89,6 +92,48 @@ if (library) {
   loadSheetInfo(); // for /mcp, read once now rather than on the first request
 }
 
+// The rulebooks are the books' text, so they are served only to MCP clients
+// with a token: without MCP_TOKEN they aren't loaded at all. Nor from a folder
+// the server hands out as files.
+let rules = null;
+if ((process.env.RULES_DIR || process.env.RULES_FOLDER_ID) && !mcpTokens.length) {
+  console.error("Rules: not loading the rulebooks: their text needs MCP_TOKEN, or /mcp would give it to anyone.");
+} else {
+  try {
+    if (process.env.RULES_DIR) {
+      // Real paths, so a link can't hide it; a folder not there yet is checked as named.
+      const real = (p) => {
+        try {
+          return realpathSync(p);
+        } catch {
+          return path.resolve(p);
+        }
+      };
+      const dir = real(process.env.RULES_DIR);
+      for (const root of [appRoot, sheetRoot]) {
+        const served = real(root);
+        if (dir === served || dir.startsWith(served + path.sep)) throw new Error(`RULES_DIR is inside ${root}, which is served to anyone`);
+      }
+    }
+    rules = rulesFromEnv(process.env);
+  } catch (err) {
+    console.error(`Rules: ${err.message}`);
+    process.exit(1);
+  }
+}
+
+async function loadRules(delay = 5000) {
+  try {
+    await rules.load();
+    const pages = rules.books.reduce((n, book) => n + book.pages.length, 0);
+    console.log(`Rules: ${rules.books.length} book${rules.books.length === 1 ? '' : 's'}, ${pages} pages in ${rules.describe()}`);
+  } catch (err) {
+    console.error(`Rules: could not load ${rules.describe()}, retrying in ${delay / 1000}s:`, err.message);
+    setTimeout(() => loadRules(Math.min(delay * 2, 300_000)), delay).unref();
+  }
+}
+if (rules) loadRules();
+
 // The request's URL for the log, without an MCP token however its path is encoded.
 function loggedUrl(req) {
   try {
@@ -120,7 +165,7 @@ async function handle(req, res) {
 
   if (pathname.startsWith('/api/')) return handleApi(req, res, pathname, library);
   if (pathname === '/mcp' || pathname.startsWith('/mcp/')) {
-    return handleMcp(req, res, { library, sheet: loadSheetInfo, version, tokens: mcpTokens, pathname });
+    return handleMcp(req, res, { library, rules, sheet: loadSheetInfo, version, tokens: mcpTokens, pathname });
   }
 
   if (req.method !== 'GET' && req.method !== 'HEAD') {

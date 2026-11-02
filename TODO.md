@@ -38,7 +38,7 @@ Roll20's Pictos and dice fonts are proprietary, so their glyphs are mapped to Un
 ## Rules
 
 - [x] Turn GURPS PDFs with a text layer into Markdown, a marker per printed page (`scripts/book-to-markdown.mjs`).
-- [ ] MCP tools to search and read the rules (`search_rules`, `read_rules`), only when `MCP_TOKEN` is set, from a private folder.
+- [x] MCP tools to search and read the rules (`search_rules`, `read_rules`), only when `MCP_TOKEN` is set, from a private folder (`lib/rules.mjs`).
 - [ ] Scans without text (the Portuguese Basic Set): OCR with macOS Vision. Its faded stat lines (cost, duration) come out garbled.
 - [ ] Keep a paragraph whole when a box in the middle of the page cuts it.
 

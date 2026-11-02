@@ -15,7 +15,7 @@ and the server and app have zero runtime dependencies (Node 18+).
 npm start                      # http://localhost:8080 (PORT, HOST env vars)
 STORAGE_DIR=./library npm start  # with a shared character library in a local directory
 npm install && npm test        # all tests; puppeteer-core drives a local Chrome (CHROME_PATH if not found)
-node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs tests/mcp.test.mjs tests/sheet-html.test.mjs tests/runtime.test.mjs tests/page-refs.test.mjs tests/book-to-markdown.test.mjs  # no Chrome needed
+node --test tests/roll20.test.mjs tests/storage.test.mjs tests/drive.test.mjs tests/api.test.mjs tests/mcp.test.mjs tests/sheet-html.test.mjs tests/runtime.test.mjs tests/page-refs.test.mjs tests/book-to-markdown.test.mjs tests/rules.test.mjs  # no Chrome needed
 node --test --test-name-pattern="skill levels" tests/sheet.test.mjs      # one browser test
 TEST_URL=http://localhost:8080/ npm test                                 # against an already-running server
 make test-docker               # build the image, run it locked down, run the tests against it (what CI runs)
@@ -129,8 +129,13 @@ before closing the browser context, or the close never finishes.
 its position and font size (PDFKit, run with `swift`); the Node side drops header/footer bands (finding
 the page offset from their numbers), orders columns, makes headings from sizes and paragraphs from
 indents and line widths, and links "p. N" refs. Output is one Markdown file per PDF with a
-`<a id="M23"></a>**[M23]**` marker per printed page. It is copyrighted text: tests use made-up pages,
-and output never goes in the repo or image.
+`<a id="M23"></a>**[M23]**` marker per printed page. It is copyrighted text: tests use made-up pages
+(`tests/fixtures/gurps-testing.md` is a made-up book), and output never goes in the repo or image.
+`lib/rules.mjs` loads those files from `RULES_DIR` or a Drive folder (`RULES_FOLDER_ID`), splits pages on
+the markers and sections on headings, and searches with BM25 (heading words count three times, an exact
+heading match doubles). `server.mjs` loads rules only with `MCP_TOKEN`; `/mcp` serves the character tools
+with a library and `search_rules`/`read_rules` (`uses: 'rules'` in `lib/mcp-tools.mjs`) with rules, and
+the `initialize` instructions follow.
 
 **Attribute names.** Stored lowercase. Repeating fields are `repeating_<section>_<rowId>_<field>`;
 section names never contain `_`, and row ids start with `-` and contain no `_` (the sheet splits on
